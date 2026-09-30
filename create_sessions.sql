@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS go_sessions ( session_id varchar(32) NOT NULL, user_agent varchar(255) NOT NULL, last_activity int(10) unsigned NOT NULL DEFAULT '0', user_data text, ip_address varchar(45) NOT NULL, PRIMARY KEY (session_id) ) ENGINE=InnoDB DEFAULT CHARSET=utf8;

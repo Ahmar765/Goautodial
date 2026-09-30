@@ -1,0 +1,9 @@
+/* Custom CSS for wizard form for creamy */
+
+.wizard-form{
+	padding: 10px 20px;
+}
+
+#campaign-id-edit-btn{
+	min-height: 34px;
+}

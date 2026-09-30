@@ -1,0 +1,39 @@
+services:
+  web:
+    image: php:7.4-apache
+    container_name: goautodial-web
+    ports:
+      - "127.0.0.1:8080:80"
+    volumes:
+      - ./:/var/www/html
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_USER: goautodial
+      DB_PASS: goautodial
+      DB_NAME: goautodial
+    command: >
+      bash -c "
+      a2enmod rewrite &&
+      docker-php-ext-install mysqli &&
+      echo 'opcache.enable=0' > /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini &&
+      apache2-foreground
+      "
+
+  db:
+    image: mariadb:10.6
+    container_name: goautodial-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: goautodial
+      MYSQL_USER: goautodial
+      MYSQL_PASSWORD: goautodial
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - goautodial-db-data:/var/lib/mysql
+
+volumes:
+  goautodial-db-data:
