@@ -1,0 +1,73 @@
+name: Deploy Goautodial to Server
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+            echo "Navigating to project directory..."
+            cd ~/Goautodial
+
+            # 1. Save previous commit for Rollback
+            PREV_COMMIT=$(git rev-parse HEAD)
+            echo "Current working commit: $PREV_COMMIT"
+
+            # 2. Pull latest code
+            echo "Pulling latest code from GitHub..."
+            git pull origin main
+
+            # 3. Deploy containers with Docker Compose
+            echo "Starting deployment with Docker Compose..."
+            if ! docker compose up -d --build; then
+              echo "----------------------------------------------------"
+              echo "ERROR: Docker deployment failed to start!"
+              echo "Initiating ROLLBACK to commit: $PREV_COMMIT..."
+              echo "----------------------------------------------------"
+              git reset --hard "$PREV_COMMIT"
+              docker compose up -d
+              echo "Rollback complete. System restored to previous commit."
+              exit 1
+            fi
+
+            # 4. HTTP Health Check & Auto-Rollback on Failure
+            echo "Waiting 7 seconds for Apache to initialize..."
+            sleep 7
+
+            echo "Performing HTTP Health Check on http://127.0.0.1:8080..."
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080 || echo "000")
+            echo "Received HTTP Status Code: $HTTP_STATUS"
+
+            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ]; then
+              echo "----------------------------------------------------"
+              echo "ERROR: Health check failed! (HTTP Status: $HTTP_STATUS)"
+              echo "Fetching last 40 lines of container logs for debugging:"
+              docker compose logs --tail=40
+              echo "Initiating ROLLBACK to commit: $PREV_COMMIT..."
+              echo "----------------------------------------------------"
+              git reset --hard "$PREV_COMMIT"
+              docker compose up -d
+              echo "Rollback complete. System restored to previous commit."
+              exit 1
+            fi
+
+            echo "Health check passed! Web service is responding correctly."
+
+            # 5. Check container status
+            echo "Checking container status..."
+            docker compose ps
+
+            echo "Deployment completed successfully!"
