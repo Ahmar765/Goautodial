@@ -29,14 +29,14 @@
 	ini_set('post_max_size', '600M');
 	ini_set('max_execution_time', 0);
 
-	// dependencies
-	require_once('CRMDefaults.php');
-	require_once('LanguageHandler.php');
-	require_once('CRMUtils.php');
-	require_once('goCRMAPISettings.php');
-	require_once('GoHttpClient.php');
-	require_once('SessionHandler.php');
-	@include_once('Config.php');
+	// dependencies (always resolve relative to this file)
+	require_once __DIR__ . '/CRMDefaults.php';
+	require_once __DIR__ . '/LanguageHandler.php';
+	require_once __DIR__ . '/CRMUtils.php';
+	require_once __DIR__ . '/goCRMAPISettings.php';
+	require_once __DIR__ . '/GoHttpClient.php';
+	require_once __DIR__ . '/SessionHandler.php';
+	@include_once __DIR__ . '/Config.php';
 	$session_class = new \creamy\SessionHandler();
 
 	// ini_set('display_errors', 1);

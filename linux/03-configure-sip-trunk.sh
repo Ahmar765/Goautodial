@@ -3,10 +3,28 @@
 # Supports SIP_AUTHENTICATION=ip (Telnyx IP auth) or reg (username/password register).
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB_ROOT="${WEB_ROOT:-/var/www/html}"
+
+# Load Telnyx/SIP settings if not already in the environment
+if [[ -z "${SIP_REG_HOST:-}" ]]; then
+  if [[ -f "$SCRIPT_DIR/server.env" ]]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$SCRIPT_DIR/server.env"
+    set +a
+  elif [[ -f "$SCRIPT_DIR/server.env.example" ]]; then
+    echo "WARN: using linux/server.env.example — copy to server.env for production"
+    set -a
+    # shellcheck disable=SC1091
+    . "$SCRIPT_DIR/server.env.example"
+    set +a
+  fi
+fi
 
 if [[ -z "${SIP_REG_HOST:-}" ]]; then
   echo "SIP_REG_HOST not set. Skipping carrier insert."
+  echo "Create linux/server.env with SIP_REG_HOST=sip.telnyx.com (see server.env.example)."
   exit 0
 fi
 
@@ -60,6 +78,9 @@ RESP=$(curl -sS -X POST "$API_URL" \
   --data-urlencode "goUser=${GO_USER}" \
   --data-urlencode "goPass=${GO_PASS}" \
   --data-urlencode "responsetype=json" \
+  --data-urlencode "session_user=goadmin" \
+  --data-urlencode "log_user=goadmin" \
+  --data-urlencode "log_group=ADMIN" \
   --data-urlencode "goAction=goAddCarrier" \
   --data-urlencode "carrier_type=sip" \
   --data-urlencode "carrier_id=${SIP_CARRIER_ID}" \

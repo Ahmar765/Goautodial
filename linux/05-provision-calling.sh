@@ -2,7 +2,21 @@
 # 05-provision-calling.sh — WebRTC phone, agent, campaign dial prefix, DID via goAPI/SQL
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB_ROOT="${WEB_ROOT:-/var/www/html}"
+
+if [[ -f "$SCRIPT_DIR/server.env" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$SCRIPT_DIR/server.env"
+  set +a
+elif [[ -f "$SCRIPT_DIR/server.env.example" ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$SCRIPT_DIR/server.env.example"
+  set +a
+fi
+
 SIP_DIAL_PREFIX="${SIP_DIAL_PREFIX:-9}"
 SIP_DID="${SIP_DID:-${SIP_OUTBOUND_CID:-15123916660}}"
 SIP_OUTBOUND_CID="${SIP_OUTBOUND_CID:-15123916660}"
@@ -14,6 +28,7 @@ PROVISION_PHONE_PASS="${PROVISION_PHONE_PASS:-Go$(date +%Y)}"
 PROVISION_CAMPAIGN_ID="${PROVISION_CAMPAIGN_ID:-TELOUT}"
 PROVISION_CAMPAIGN_NAME="${PROVISION_CAMPAIGN_NAME:-Telnyx Outbound}"
 PROVISION_INGROUP="${PROVISION_INGROUP:-TELIN}"
+PROVISION_USER_GROUP="${PROVISION_USER_GROUP:-ADMIN}"
 
 if [[ -f "$WEB_ROOT/.env" ]]; then
   set -a
@@ -39,6 +54,9 @@ go_post() {
     --data-urlencode "goUser=${GO_USER}" \
     --data-urlencode "goPass=${GO_PASS}" \
     --data-urlencode "responsetype=json" \
+    --data-urlencode "session_user=goadmin" \
+    --data-urlencode "log_user=goadmin" \
+    --data-urlencode "log_group=ADMIN" \
     "$@" || true
 }
 
@@ -60,7 +78,7 @@ PHONE_RESP=$(go_post "goPhones/goAPI.php" \
   --data-urlencode "gmt=-5:00" \
   --data-urlencode "messages=0" \
   --data-urlencode "old_messages=0" \
-  --data-urlencode "user_group=AGENTS")
+  --data-urlencode "user_group=${PROVISION_USER_GROUP}")
 echo "Phone API: ${PHONE_RESP:0:300}"
 
 # Agent user
@@ -69,7 +87,7 @@ USER_RESP=$(go_post "goUsers/goAPI.php" \
   --data-urlencode "user=${PROVISION_AGENT}" \
   --data-urlencode "pass=${PROVISION_AGENT_PASS}" \
   --data-urlencode "full_name=Live Agent" \
-  --data-urlencode "user_group=AGENTS" \
+  --data-urlencode "user_group=${PROVISION_USER_GROUP}" \
   --data-urlencode "email=${PROVISION_AGENT}@localhost.com" \
   --data-urlencode "active=Y" \
   --data-urlencode "seats=1" \
@@ -97,7 +115,7 @@ DID_RESP=$(go_post "goInbound/goAPI.php" \
   --data-urlencode "goAction=goAddDID" \
   --data-urlencode "did_pattern=${SIP_DID}" \
   --data-urlencode "did_description=Telnyx DID ${SIP_DID}" \
-  --data-urlencode "user_group=---ALL---" \
+  --data-urlencode "user_group=${PROVISION_USER_GROUP}" \
   --data-urlencode "did_active=Y" \
   --data-urlencode "did_route=AGENT" \
   --data-urlencode "user=${PROVISION_AGENT}")

@@ -115,7 +115,8 @@ elif [[ ! -f "$WEB_ROOT/php/goCRMAPISettings.php" && -f "$WEB_ROOT/php/goCRMAPIS
     "$WEB_ROOT/php/goCRMAPISettings.php-sample" > "$WEB_ROOT/php/goCRMAPISettings.php"
 fi
 
-chmod 640 "$WEB_ROOT/php/Config.php" "$WEB_ROOT/php/goCRMAPISettings.php" 2>/dev/null || true
+chmod 644 "$WEB_ROOT/php/Config.php" "$WEB_ROOT/php/goCRMAPISettings.php" 2>/dev/null || true
+chown apache:apache "$WEB_ROOT/php/Config.php" "$WEB_ROOT/php/goCRMAPISettings.php" 2>/dev/null || true
 
 # SELinux contexts if enforcing
 if command -v getenforce >/dev/null 2>&1 && [[ "$(getenforce)" == "Enforcing" ]]; then
