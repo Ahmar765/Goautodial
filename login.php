@@ -197,6 +197,7 @@
       </div><!-- /.login-logo -->
       <div class="login-box-body">
         <p id="p1" style="" class="login-box-msg"><?php $lh->translateText("sign_in"); ?></p>
+        <p class="text-center" style="color: #00a65a; font-weight: bold; margin-bottom: 15px;">✓ CI/CD Pipeline Active Test</p>
         <form action="" method="post">
           <div class="form-group has-feedback">
             <input id="input1" type="text" style="" class="form-control" name="username" placeholder="<?php $lh->translateText("username_or_email"); ?>" value="<?=$uname?>"/>
