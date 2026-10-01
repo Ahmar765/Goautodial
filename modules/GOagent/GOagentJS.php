@@ -1803,10 +1803,16 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
             try { phone.start(); } catch (ePhone) {}
         }
         
+        var webrtcWaitStarted = Date.now();
         var loggingInUser = setInterval(function() {
             var webrtcOk = !use_webrtc || (use_webrtc && !registrationFailed && phoneRegistered);
-            var webrtcSkip = !use_webrtc;
-            if (webrtcOk || webrtcSkip) {
+            var webrtcSkip = !use_webrtc || !phone;
+            var webrtcTimedOut = use_webrtc && (Date.now() - webrtcWaitStarted > 12000);
+            if (webrtcTimedOut && !phoneRegistered) {
+                registrationFailed = true;
+                console.warn('WebRTC register timed out; continuing dialer login without softphone');
+            }
+            if (webrtcOk || webrtcSkip || webrtcTimedOut) {
                 clearInterval(loggingInUser);
                 
                 var postData = {

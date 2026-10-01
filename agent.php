@@ -246,7 +246,11 @@ $osTicket = $mh->moduleIsEnabled('osTicket');
 
 			$(window).load(function() {
 				$(".preloader").fadeOut("slow", function() {
-					if (use_webrtc && (!!$.prototype.snackbar) && phone.isConnected()) {
+					if (typeof use_webrtc !== 'undefined' && use_webrtc
+						&& (!!$.prototype.snackbar)
+						&& typeof phone !== 'undefined' && phone
+						&& typeof phone.isConnected === 'function'
+						&& phone.isConnected()) {
 						$.snackbar({content: "<i class='fa fa-exclamation-circle fa-lg text-warning' aria-hidden='true'></i>&nbsp; Please wait while we register your phone extension to the dialer...", timeout: 3000, htmlAllowed: true});
 					}
 				});

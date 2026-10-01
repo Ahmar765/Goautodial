@@ -203,32 +203,37 @@ class GOagent extends Module {
 		$_SESSION['module_dir'] = $goModuleDIR;
 		$_SESSION['campaign_id'] = (isset($_SESSION['campaign_id']) && strlen($_SESSION['campaign_id']) > 0) ? $_SESSION['campaign_id'] : '';
 		
-		//$webProtocol = (preg_match("/Windows/", $_SERVER['HTTP_USER_AGENT'])) ? "wss" : "ws";
-		$webProtocol = (strlen($_SERVER['HTTPS']) > 0) ? "wss" : "ws";
+		// Prefer WSS for TLS WebRTC ports; avoid strlen(null) notices that break JS
+		$httpsOn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+		$webProtocol = $httpsOn ? 'wss' : 'ws';
 		
 		$this->goDB->where('setting', 'GO_agent_use_wss');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$useWebRTC = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
+		$useWebRTC = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['use_webrtc'] = $useWebRTC;
 		
 		if ($useWebRTC) {
 			$this->goDB->where('setting', 'GO_agent_wss');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketURL = (strlen($rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
+			$websocketURL = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketPORT = (strlen($rslt['value']) > 0) ? $rslt['value'] : "10443";
+			$websocketPORT = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "10443";
+			// Kamailio TLS/WSS is typically 4443/8443/10443 — force wss even on http:// CRM pages
+			if (preg_match('/^(443|4443|8443|10443)$/', (string) $websocketPORT)) {
+				$webProtocol = 'wss';
+			}
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketSIP = (strlen($rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
+			$websocketSIP = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
 			$websocketSIPPort = "";
 			if (!preg_match("/server_ip/", $websocketSIP)) {
-				if (strlen($rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
+				if (isset($rslt['value']) && strlen((string) $rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
 					$websocketSIPPort = ":{$rslt['value']}'";
 				} else {
 					$websocketSIPPort = "'";
@@ -237,7 +242,7 @@ class GOagent extends Module {
 			
 			$this->goDB->where('setting', 'GO_agent_domain');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$domain = (strlen($rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
+			$domain = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
 		}
 		
 		$labelsResponse = $this->getLabels();
@@ -395,7 +400,8 @@ EOF;
 		if ($useWebRTC) {
 			$display_name = $_SESSION['user'];
 			$phone_login = $_SESSION['phone_login'];
-			$socketParams = "password: phone_pass,";
+			$phone_login_js = json_encode((string) $phone_login, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+			$socketParams = "password: (typeof phone_pass !== 'undefined' ? phone_pass : ''),";
 			if (false) {
 				$ha1_pass = $_SESSION['ha1'];
 				$realm = $_SESSION['realm'];
@@ -409,8 +415,9 @@ EOF;
 	var localStream;
 	var remoteStream;
 	var globalSession;
-	var phone_login = '$phone_login';
-	
+	var phone_login = {$phone_login_js};
+	var phone = null;
+	try {
 	var socket = new JsSIP.WebSocketInterface('{$webProtocol}://{$websocketURL}:{$websocketPORT}/');
 	var configuration = {
 		sockets : [ socket ],
@@ -424,7 +431,15 @@ EOF;
 	
 	//init rtcninja libraries...
 	
-	var phone = new JsSIP.UA(configuration);
+	phone = new JsSIP.UA(configuration);
+	} catch (ePhoneInit) {
+		console.error('WebRTC phone init failed', ePhoneInit);
+		phone = null;
+		if (typeof registrationFailed !== 'undefined') { registrationFailed = true; }
+	}
+	if (!phone) {
+		// skip JsSIP event hooks when UA failed to start
+	} else {
 	
 	phone.on('connected', function(e) {
 		//console.log('connected', e);
@@ -619,6 +634,7 @@ EOF;
 			type: 'error'
 		});
 	});
+	} // end if (phone)
 </script>
 EOF;
 		}
@@ -986,17 +1002,18 @@ EOF;
 		$phoneIsRegistered = $this->lh()->translationFor('phone_is_now_registered');
 		$registrationFailed = $this->lh()->translationFor('registration_failed_refresh');
 		
-		//$webProtocol = (preg_match("/Windows/", $_SERVER['HTTP_USER_AGENT'])) ? "wss" : "ws";
-		$webProtocol = (strlen($_SERVER['HTTPS']) > 0) ? "wss" : "ws";
+		// Prefer WSS for TLS WebRTC ports; avoid strlen(null) notices that break JS
+		$httpsOn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+		$webProtocol = $httpsOn ? 'wss' : 'ws';
 		
 		$this->goDB->where('setting', 'GO_agent_use_wss');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$useWebRTC = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
+		$useWebRTC = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['use_webrtc'] = $useWebRTC;
 		
 		$this->goDB->where('setting', 'GO_show_phones');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$showPhones = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
+		$showPhones = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['show_phones'] = $showPhones;
 		
 		//$this->goDB->where('setting', 'GO_modify_phones');
@@ -1007,21 +1024,24 @@ EOF;
 		if ($useWebRTC) {
 			$this->goDB->where('setting', 'GO_agent_wss');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketURL = (strlen($rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
+			$websocketURL = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketPORT = (strlen($rslt['value']) > 0) ? $rslt['value'] : "10443";
+			$websocketPORT = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "10443";
+			if (preg_match('/^(443|4443|8443|10443)$/', (string) $websocketPORT)) {
+				$webProtocol = 'wss';
+			}
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketSIP = (strlen($rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
+			$websocketSIP = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
 			$websocketSIPPort = "";
 			if (!preg_match("/server_ip/", $websocketSIP)) {
-				if (strlen($rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
+				if (isset($rslt['value']) && strlen((string) $rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
 					$websocketSIPPort = ":{$rslt['value']}'";
 				} else {
 					$websocketSIPPort = "'";
@@ -1030,7 +1050,7 @@ EOF;
 			
 			$this->goDB->where('setting', 'GO_agent_domain');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$domain = (strlen($rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
+			$domain = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
 		}
 		
 		
