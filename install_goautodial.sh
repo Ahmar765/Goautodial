@@ -78,5 +78,10 @@ yum -y localinstall goautodial-ce-4.0-1768410003.noarch.rpm
 cd /usr/src/goautodial 
 ./install.sh
 
-echo "[13/13] Installation Complete! Rebooting..."
-reboot
+echo "[13/13] Installation Complete!"
+if [[ "${SKIP_REBOOT:-0}" == "1" ]]; then
+  echo "SKIP_REBOOT=1 — not rebooting. Reboot manually after CRM deploy if DKMS modules require it."
+else
+  echo "Rebooting..."
+  reboot
+fi

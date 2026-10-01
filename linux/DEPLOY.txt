@@ -1,0 +1,49 @@
+GOautodial v4 — Linux VPS deploy (live calling)
+================================================
+
+REQUIREMENTS
+- Fresh AlmaLinux 9 or Rocky Linux 9 VPS
+- 4+ vCPU, 8GB+ RAM, 40GB+ disk
+- Root SSH (key preferred)
+- Telnyx Mission Control: IP-auth connection, allow this VPS public IP
+- Ports: 80, 443, 5060/udp, 10000-20000/udp, WebRTC/WSS as needed
+
+ONE-COMMAND FROM WINDOWS
+1. Edit linux/server.env (copy from server.env.example if needed)
+   - SSH_HOST, SSH_USER, SSH_KEY (or interactive password login)
+   - CRM_PUBLIC_URL=http://YOUR_VPS_IP  (or https://your.domain)
+   - Telnyx block: already set for Ahmar (sip.telnyx.com, CID 15123916660, IP auth)
+2. Telnyx: add the VPS public IP to the IP-auth connection
+3. Run:
+     powershell -ExecutionPolicy Bypass -File linux\remote-bootstrap.ps1
+
+ON THE VPS DIRECTLY
+  git clone https://github.com/Ahmar765/Goautodial.git /usr/src/goautodial-crm-deploy
+  cd /usr/src/goautodial-crm-deploy
+  # copy/edit linux/server.env
+  bash linux/run-all.sh
+
+WHAT RUN-ALL DOES
+  00  OS preflight (EL9)
+  01  install_goautodial.sh (Asterisk, Kamailio, MariaDB, goAPIv2) + firewall + VARserver_ip
+  02  Deploy CRM + production .env (goAPI at http://127.0.0.1/goAPIv2)
+  03  Telnyx carrier (IP auth, no SIP register)
+  05  Default WebRTC phone / agent / campaign dial prefix 9 / DID
+  06  Optional HTTPS if CRM_PUBLIC_URL is https://real-domain
+  04  Smoke test (services, goAPI, carrier, health.php)
+
+AFTER INSTALL
+- Open CRM URL (and /php/health.php)
+- Default provisioned agent: agent1 / agent123  phone 8001 (see script output)
+- Campaign dial prefix 9 — dial 9 + number; CID 15123916660
+- Map DID 15123916660 under Inbound if inbound needed
+- Reboot once if DKMS/RTP modules need it
+
+SSH PASSWORD AUTH
+- Key auth: set SSH_KEY=path\to\id_rsa in server.env
+- Password: use interactive ssh/scp (or install sshpass and extend bootstrap); key is preferred
+
+NOTES
+- .env and linux/server.env are gitignored — never commit live secrets
+- php/Config.php and php/goCRMAPISettings.php are env-driven and safe to ship
+- XAMPP on Windows cannot place PSTN calls; this Linux path is required for live dialing

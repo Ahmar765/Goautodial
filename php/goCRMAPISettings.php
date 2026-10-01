@@ -1,6 +1,6 @@
 <?php
 /**
- * goAPIv2 settings sample (same env-driven logic as goCRMAPISettings.php).
+ * goAPIv2 settings. Safe to ship in git — override via /.env (GO_API_*).
  */
 require_once __DIR__ . '/loadEnv.php';
 creamy_load_dotenv(dirname(__DIR__));

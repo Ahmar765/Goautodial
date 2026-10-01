@@ -1,6 +1,7 @@
 <?php
 /**
- * Env-driven CRM config template (same as Config.php). Kept for CE installers that expect *-sample.
+ * Env-driven CRM config. Safe to ship in git — secrets live in /.env only.
+ * Copy .env.example -> .env on the server (or run linux/02-deploy-crm.sh).
  */
 require_once __DIR__ . '/loadEnv.php';
 creamy_load_dotenv(dirname(__DIR__));

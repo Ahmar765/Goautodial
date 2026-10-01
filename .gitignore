@@ -1,0 +1,17 @@
+# Secrets and local-only config (never commit)
+.env
+linux/server.env
+php/Config.local.php
+astguiclient.conf
+goautodial.conf
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Temp / build
+*.tgz
+*.tar.gz
+goautodial-deploy.tgz
