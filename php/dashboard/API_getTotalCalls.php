@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getTotalCalls.php
  * @brief       Displays total inbound and outbound calls

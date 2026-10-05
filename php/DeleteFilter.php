@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteFilter.php
  * @brief       Handles Delete Filter Requests

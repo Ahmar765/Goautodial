@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddCarrier.php
  * @brief       Handles Add Carrier Request

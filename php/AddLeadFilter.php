@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddLeadFilter.php
  * @brief       Handles Add Lead Filter Request

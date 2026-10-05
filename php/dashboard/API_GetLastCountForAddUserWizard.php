@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        checkCalltime.php
  * @brief       API helper for add user wizard

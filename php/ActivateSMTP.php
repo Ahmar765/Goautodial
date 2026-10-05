@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ActivateSMTP.php
  * @brief       Activate/Deactivate SMTP

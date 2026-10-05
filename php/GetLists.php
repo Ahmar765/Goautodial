@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        GetLists.php
  * @brief       Handles Campaigns List Requests

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		profile.php
  * @brief 		Profile page

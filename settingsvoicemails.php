@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 /**
  * @file        settingsvoicemails.php
  * @brief       Manage Voicemails
@@ -104,13 +106,6 @@
   * APIs needed for form
   */
 	$user_groups = $api->API_getAllUserGroups();
-	if (!is_object($user_groups) || !isset($user_groups->user_group) || !is_array($user_groups->user_group)) {
-		$fallbackGroup = isset($_SESSION['usergroup']) ? $_SESSION['usergroup'] : 'ADMIN';
-		$user_groups = (object) array(
-			'user_group' => array($fallbackGroup),
-			'group_name' => array($fallbackGroup),
-		);
-	}
 ?>
     <!-- ADD USER GROUP MODAL -->
         <div class="modal fade" id="addvoicemail-modal" tabindex="-1" aria-labelledby="addvoicemail-modal" >
@@ -137,20 +132,19 @@
                             </h4>
                             <fieldset>
                                 <div class="form-group mt">
-                                    <label class="col-sm-3 control-label" for="voicemail_id"><?php $lh->translateText("voicemail_id"); ?> <span class="text-danger">*</span></label>
+                                    <label class="col-sm-3 control-label" for="voicemail_id"><?php $lh->translateText("voicemail_id"); ?></label>
                                     <div class="col-sm-9 mb">
-                                        <input type="text" name="voicemail_id" id="voicemail_id" class="form-control" inputmode="numeric" pattern="[0-9]{2,10}" placeholder="e.g. 1001" minlength="2" maxlength="10" required>
-                                        <small class="text-muted">Numbers only, 2–10 digits (required).</small>
+                                        <input type="number" name="voicemail_id" min="1" id="voicemail_id" class="form-control" placeholder="<?php $lh->translateText("Numbers Only"); ?>" minlength="2" maxlength="10">
                                     </div>
                                 </div>
                                 <div class="form-group">        
-                                    <label class="col-sm-3 control-label" for="password"><?php $lh->translateText("password"); ?> <span class="text-danger">*</span></label>
+                                    <label class="col-sm-3 control-label" for="password"><?php $lh->translateText("password"); ?> </label>
                                     <div class="col-sm-9 mb">
                                         <input type="text" name="password" id="password" class="form-control" placeholder="<?php $lh->translateText("password"); ?>" required>
                                     </div>
                                 </div>
                                 <div class="form-group">        
-                                    <label class="col-sm-3 control-label" for="name"><?php $lh->translateText("name"); ?> <span class="text-danger">*</span></label>
+                                    <label class="col-sm-3 control-label" for="name"><?php $lh->translateText("name"); ?></label>
                                     <div class="col-sm-9 mb">
                                         <input type="text" name="name" id="name" class="form-control" placeholder="<?php $lh->translateText("name"); ?>" required>
                                     </div>
@@ -247,22 +241,6 @@
                     },
                     onFinished: function (event, currentIndex)
                     {
-                        var vmid = String($('#voicemail_id').val() || '').trim();
-                        var vpass = String($('#password').val() || '').trim();
-                        var vname = String($('#name').val() || '').trim();
-                        if (!/^\d{2,10}$/.test(vmid)) {
-                            sweetAlert("<?php $lh->translateText("oups"); ?>", "Error: Set a value for Voicemail ID (numbers only, e.g. 1001).", "error");
-                            return false;
-                        }
-                        if (!vpass) {
-                            sweetAlert("<?php $lh->translateText("oups"); ?>", "Error: Set a password for this voicemail.", "error");
-                            return false;
-                        }
-                        if (!vname) {
-                            sweetAlert("<?php $lh->translateText("oups"); ?>", "Error: Set a name for this voicemail.", "error");
-                            return false;
-                        }
-
                         $('#finish').text("<?php $lh->translateText("loading"); ?>");
                         $('#finish').attr("disabled", true);
 
@@ -270,26 +248,18 @@
                             $.ajax({
                                 url: "./php/AddVoicemail.php",
                                 type: 'POST',
-                                dataType: 'json',
                                 data: $("#create_voicemail").serialize(),
-                            }).done(function(data) {
+                                success: function(data) {
+									console.log(data);
 									$('#finish').text("<?php $lh->translateText("submit"); ?>");
 									$('#finish').prop("disabled", false);
-									if (data && (data === 1 || data.ok === 1 || data.status === 1)) {
+									if(data == 1){
 										  swal({title: "<?php $lh->translateText("success"); ?>",text: "<?php $lh->translateText("add_voicemail_success"); ?>",type: "success"},function(){window.location.href = 'settingsvoicemails.php';});
-									} else {
-										var msg = (data && data.message) ? data.message : "<?php $lh->translateText("something_went_wrong"); ?>";
-										sweetAlert("<?php $lh->translateText("oups"); ?>", msg, "error");
 									}
-                            }).fail(function(xhr) {
-									$('#finish').text("<?php $lh->translateText("submit"); ?>");
-									$('#finish').prop("disabled", false);
-									var msg = "<?php $lh->translateText("something_went_wrong"); ?>";
-									try {
-										var j = JSON.parse(xhr.responseText);
-										if (j.message) { msg = j.message; }
-									} catch (e) {}
-									sweetAlert("<?php $lh->translateText("oups"); ?>", msg, "error");
+									else{
+										sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>"+data, "error");
+									}
+                                }
                             });
                     }
                 });

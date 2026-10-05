@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        LoginRocketChat.php
  * @brief       Logs in user to rocketchat
@@ -38,8 +40,8 @@ $pass = $_POST['pass'];
         CURLOPT_FOLLOWLOCATION => true,
        	CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         CURLOPT_CUSTOMREQUEST => "POST",
-		CURLOPT_SSL_VERIFYHOST => false,
-		CURLOPT_SSL_VERIFYPEER => false,
+		CURLOPT_SSL_VERIFYHOST => 2,
+		CURLOPT_SSL_VERIFYPEER => true,
        	CURLOPT_POSTFIELDS =>"{\r\n  \"user\": \"$user\",\r\n  \"password\": \"$pass\"}",
         CURLOPT_HTTPHEADER => array(
        	        "Content-Type:application/json"

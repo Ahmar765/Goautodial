@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteServer.php
  * @brief       Handles Delete Server Requests

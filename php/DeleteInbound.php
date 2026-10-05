@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteInbound.php
  * @brief       Handles Delete Ingroup, IVR & DID Requests

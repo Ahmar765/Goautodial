@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getAgentsMonitoringSummary.php
  * @brief       Displays summary of agents monitoring data and HTML

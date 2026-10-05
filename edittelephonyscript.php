@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		edittelephonyscript.php
  * @brief 		Edit scripts

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteAllCustomField.php
  * @brief       Handles Delete Custom Field Requests

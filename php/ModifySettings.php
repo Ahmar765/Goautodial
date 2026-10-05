@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
 	The MIT License (MIT)
 	
@@ -73,9 +75,8 @@ if ($validated == 1) {
 
 	// check permissions
 	if (!$user->userHasAdminPermission()) {
-		ob_clean();
-		$lh->translateText("you_dont_have_permission");
-		exit;
+		$this->lh->translateText("you_dont_have_permission");
+		return;
 	}
 	
 	// build data for setting.	
@@ -83,13 +84,13 @@ if ($validated == 1) {
 	$locale = $_POST["locale"];
 	$confirmationEmail = isset($_POST["confirmationEmail"]) ? true : false;
 	$eventEmail = isset($_POST["eventEmail"]) ? true : false;
-	$theme = $_POST["theme"] ?? '';
-	$baseURL = htmlentities($_POST["base_url"] ?? '');
-	$minFreq = isset($_POST["jobScheduling"]) ? $_POST["jobScheduling"] : null;
+	$theme = $_POST["theme"];
+	$baseURL = htmlentities($_POST["base_url"]);
+	$minFreq = $_POST["jobScheduling"];
 	$customCompanyName = isset($_POST["company_name"]) ? htmlentities($_POST["company_name"]) : null;
-	$googleAPIKey = htmlentities($_POST["google_api_key"] ?? '');
-	$slave_db_ip = htmlentities($_POST["slave_db_ip"] ?? '');
-	$voicemail_greeting = $_POST["voicemail_greeting"] ?? null;
+	$googleAPIKey = htmlentities($_POST["google_api_key"]);
+	$slave_db_ip = htmlentities($_POST["slave_db_ip"]);
+	$voicemail_greeting = $_POST["voicemail_greeting"];
 	// generate settings array
 	$data = array(
 		CRM_SETTING_CONFIRMATION_EMAIL => $confirmationEmail, 
@@ -108,29 +109,21 @@ if ($validated == 1) {
 	if (isset($customLogoOrigin)) {
 		$ih = new \creamy\ImageHandler();
 		$customLogoURL = $ih->generateCustomCompanyLogoAndReturnURL($customLogoOrigin, $imageFileType);
-		if (isset($customLogoURL)) {
-			$data[CRM_SETTING_COMPANY_LOGO] = $customLogoURL;
-		} else {
-			ob_clean();
-			echo $lh->translationFor("image_file_is_not_image");
-			exit;
-		}
+		if (isset($customLogoURL)) { $data[CRM_SETTING_COMPANY_LOGO] = $customLogoURL; }
 	}
 	
 	// set settings
 	$result = $db->setSettings($data);
 
-	// Voicemail greeting lives on goAPI; CRM settings (incl. logo) must still save if API is down.
-	if (isset($voicemail_greeting)) {
-		$api->API_editSystemSetting($voicemail_greeting);
-	}
+	// allow voicemail greeting
+	$result2 = $api->API_editSystemSetting($voicemail_greeting);	
 
-	if ($result === true) {
+	// return results.
+	if ($result === true && $result2->result === 'success') {
 		ob_clean();
 		print CRM_DEFAULT_SUCCESS_RESPONSE;
 	} else {
-		ob_clean();
-		$lh->translateText("error_accessing_database");
+		ob_clean(); $lh->translateText("error_accessing_database"); 
 	}	
 } else { ob_clean(); $lh->translateText("some_fields_missing"); }
 ?>

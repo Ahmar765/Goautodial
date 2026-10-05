@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/RuntimeConfig.php';
 error_reporting(E_ALL & ~E_DEPRECATED & ~E_WARNING & ~E_NOTICE);
 ini_set('display_errors', '0');
 require_once(__DIR__ . DIRECTORY_SEPARATOR . 'CurlCompat.php');
@@ -37,7 +38,7 @@ require_once(__DIR__ . DIRECTORY_SEPARATOR . 'CurlCompat.php');
 
 
 // global constants
-define ('BASE_URL', 'https://vaglxc01.goautodial.com');
+define ('BASE_URL', \creamy\RuntimeConfig::url('APP_URL', 'http://localhost'));
 
 define ('CRM_INSTALL_VERSION', '1.0');
 define ('CRM_INSTALLED_FILE', 'installed.txt');
@@ -47,7 +48,7 @@ define ('CRM_PHP_CONFIG_FILE', 'php'.DIRECTORY_SEPARATOR.'Config.php');
 define ('CRM_PHP_BEGIN_TAG', '<?php');
 define ('CRM_PHP_END_TAG', '?>');
 define ('CRM_DEFAULT_HEADER_LOGO', 'img/logo.png');
-define ('CRM_DEFAULT_COMPANY_LOGO', 'img/customCompanyLogo.png');
+define ('CRM_DEFAULT_COMPANY_LOGO', 'uploads/customCompanyLogo.png');
 
 // messages constants
 define ('MESSAGES_GET_INBOX_MESSAGES', 0);
@@ -157,7 +158,7 @@ define('CRM_HELPDESK_TICKETS_CONTENT_TABLE_NAME', "ost_thread_entry");
 define('CRM_HELPDESK_USERS_TABLE_NAME', "ost_staff");
 
 // Session constants
-define('CRM_SESSION_DRIVER', 'database');              // The storage driver to use: files, database
+define('CRM_SESSION_DRIVER', \creamy\RuntimeConfig::value('SESSION_DRIVER', 'database'));
 define('CRM_SESSION_COOKIE_NAME', 'go_sessions');   // The session cookie/table name, must contain only [0-9a-z_] characters
 define('CRM_SESSION_EXPIRATION', 7200);             // The number of SECONDS you want the session to last. Setting to 0 (zero) means expire when the browser is closed.
 define('CRM_SESSION_MATCH_IP', FALSE);              // Whether to match the user's IP address when reading the session data.

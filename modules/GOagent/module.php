@@ -22,22 +22,14 @@
 
 namespace creamy;
 
-$creamyPhpDir = dirname(dirname(__DIR__)) . DIRECTORY_SEPARATOR . 'php' . DIRECTORY_SEPARATOR;
-if (!defined('CRM_MODULE_INCLUDE_DIRECTORY')) {
-	define('CRM_MODULE_INCLUDE_DIRECTORY', $creamyPhpDir);
-}
-require_once($creamyPhpDir . 'CRMDefaults.php');
-require_once($creamyPhpDir . 'LanguageHandler.php');
-if (!class_exists(__NAMESPACE__ . '\\Module', false)) {
-	require_once($creamyPhpDir . 'Module.php');
-}
-include($creamyPhpDir . 'Session.php');
-require_once($creamyPhpDir . 'goCRMAPISettings.php');
+require_once(CRM_MODULE_INCLUDE_DIRECTORY.'Module.php');
+require_once(CRM_MODULE_INCLUDE_DIRECTORY.'CRMDefaults.php');
+require_once(CRM_MODULE_INCLUDE_DIRECTORY.'LanguageHandler.php');
+include(CRM_MODULE_INCLUDE_DIRECTORY.'Session.php');
+require_once(CRM_MODULE_INCLUDE_DIRECTORY.'goCRMAPISettings.php');
 
-$baseURL = (!empty($_SERVER['HTTPS'])) ? "https://".$_SERVER['HTTP_HOST'] : "http://".$_SERVER['HTTP_HOST'];
-$getSlashes = preg_match_all("/\//", $_SERVER['REQUEST_URI']);
-$baseDIR = (!empty($_SERVER['REQUEST_URI']) && $getSlashes > 1) ? dirname($_SERVER['REQUEST_URI'])."/" : "/";
-define(__NAMESPACE__ . '\GO_MODULE_DIR', $baseURL . str_replace('\\', '/', $baseDIR) . 'modules/GOagent/');
+$moduleBaseURL = \creamy\RuntimeConfig::url('APP_URL');
+define(__NAMESPACE__ . '\\GO_MODULE_DIR', $moduleBaseURL . '/modules/GOagent/');
 
 /**
  * This module is an example of how to write a module for Creamy.
@@ -47,6 +39,8 @@ class GOagent extends Module {
 	protected $userrole;
 	protected $is_logged_in;
 	protected $astDB;
+	protected $goDB;
+	protected $userName;
 
 	// module meta-data (ModuleData interface implementation).
 	static function getModuleName() { return "GOautodial Agent Dialer"; }
@@ -64,7 +58,7 @@ class GOagent extends Module {
 		if (!isset($customLanguageFile)) { $customLanguageFile = $this->getModuleLanguageFileForLocale(CRM_LANGUAGE_DEFAULT_LOCALE); }
 		$this->lh()->addCustomTranslationsFromFile($customLanguageFile);
 		
-		$this->astDB = \creamy\DatabaseConnectorFactory::getInstance()->getDatabaseConnectorOfType(CRM_DB_CONNECTOR_TYPE_MYSQL, null, DB_NAME_ASTERISK);
+		$this->astDB = \creamy\DatabaseConnectorFactory::getInstance()->getDatabaseConnectorOfTypeAsterisk(CRM_DB_CONNECTOR_TYPE_MYSQL);
 		$this->goDB = \creamy\DatabaseConnectorFactory::getInstance()->getDatabaseConnectorOfType(CRM_DB_CONNECTOR_TYPE_MYSQL, null, DB_NAME);
 
 		$this->userrole = \creamy\CreamyUser::currentUser()->getUserRole();
@@ -201,53 +195,47 @@ class GOagent extends Module {
 		$goModuleDIR = GO_MODULE_DIR;
 		$userrole = $this->userrole;
 		$_SESSION['module_dir'] = $goModuleDIR;
-		$_SESSION['campaign_id'] = (isset($_SESSION['campaign_id']) && strlen($_SESSION['campaign_id']) > 0) ? $_SESSION['campaign_id'] : '';
+		$_SESSION['campaign_id'] = (strlen($_SESSION['campaign_id']) > 0) ? $_SESSION['campaign_id'] : '';
 		
-		// Prefer WSS for TLS WebRTC ports; avoid strlen(null) notices that break JS
-		$httpsOn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-		$webProtocol = $httpsOn ? 'wss' : 'ws';
+		//$webProtocol = (preg_match("/Windows/", $_SERVER['HTTP_USER_AGENT'])) ? "wss" : "ws";
+		$webProtocol = \creamy\RuntimeConfig::secureRequest() ? "wss" : "ws";
 		
 		$this->goDB->where('setting', 'GO_agent_use_wss');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$useWebRTC = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
+		$useWebRTC = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['use_webrtc'] = $useWebRTC;
 		
 		if ($useWebRTC) {
 			$this->goDB->where('setting', 'GO_agent_wss');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketURL = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
+			$websocketURL = (strlen($rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketPORT = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "10443";
-			// Kamailio TLS/WSS is typically 4443/8443/10443 — force wss even on http:// CRM pages
-			if (preg_match('/^(443|4443|8443|10443)$/', (string) $websocketPORT)) {
-				$webProtocol = 'wss';
-			}
+			$websocketPORT = (strlen($rslt['value']) > 0) ? $rslt['value'] : "10443";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketSIP = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
+			$websocketSIPExpression = (strlen($rslt['value']) > 0)
+				? json_encode($rslt['value'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : "server_ip";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
 			$websocketSIPPort = "";
-			if (!preg_match("/server_ip/", $websocketSIP)) {
-				if (isset($rslt['value']) && strlen((string) $rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
-					$websocketSIPPort = ":{$rslt['value']}'";
-				} else {
-					$websocketSIPPort = "'";
-				}
+			if (ctype_digit((string) $rslt['value']) && (int) $rslt['value'] > 0 && (int) $rslt['value'] <= 65535 && (int) $rslt['value'] !== 5060) {
+				$websocketSIPPort = ':' . (int) $rslt['value'];
 			}
-			
+			$websocketSIPPortJSON = json_encode($websocketSIPPort);
+			$websocketURIJSON = json_encode("{$webProtocol}://{$websocketURL}:{$websocketPORT}/", JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+			$phoneLoginJSON = json_encode($_SESSION['phone_login'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
 			$this->goDB->where('setting', 'GO_agent_domain');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$domain = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
+			$domain = (strlen($rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
 		}
 		
-		$labelsResponse = $this->getLabels();
-		$labels = (is_object($labelsResponse) && isset($labelsResponse->labels)) ? $labelsResponse->labels : (object)[];
-		$disable_alter_custphone = (is_object($labelsResponse) && isset($labelsResponse->disable_alter_custphone)) ? $labelsResponse->disable_alter_custphone : '';
+		$labels = $this->getLabels()->labels;
+		$disable_alter_custphone = $this->getLabels()->disable_alter_custphone;
 		$labelHTML = '';
 		foreach ($labels as $key => $value) {
 			$key = str_replace("label_", "", $key);
@@ -389,10 +377,9 @@ class GOagent extends Module {
 		//	}
 		//});
 		
-		$goJsVer = @filemtime(__DIR__ . '/GOagentJS.php') ?: time();
 		$str  = <<<EOF
 		<link type='text/css' rel='stylesheet' href='{$goModuleDIR}css/style.css'></link>
-					<script type='text/javascript' src='{$goModuleDIR}GOagentJS.php?v={$goJsVer}'></script>
+					<script type='text/javascript' src='{$goModuleDIR}GOagentJS.php'></script>
 					<script type='text/javascript' src='{$goModuleDIR}js/addons.js'></script>
 					
 EOF;
@@ -400,8 +387,7 @@ EOF;
 		if ($useWebRTC) {
 			$display_name = $_SESSION['user'];
 			$phone_login = $_SESSION['phone_login'];
-			$phone_login_js = json_encode((string) $phone_login, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
-			$socketParams = "password: (typeof phone_pass !== 'undefined' ? phone_pass : ''),";
+			$socketParams = "password: phone_pass,";
 			if (false) {
 				$ha1_pass = $_SESSION['ha1'];
 				$realm = $_SESSION['realm'];
@@ -415,31 +401,22 @@ EOF;
 	var localStream;
 	var remoteStream;
 	var globalSession;
-	var phone_login = {$phone_login_js};
-	var phone = null;
-	try {
-	var socket = new JsSIP.WebSocketInterface('{$webProtocol}://{$websocketURL}:{$websocketPORT}/');
+	var phone_login = $phoneLoginJSON;
+	
+	var socket = new JsSIP.WebSocketInterface($websocketURIJSON);
 	var configuration = {
 		sockets : [ socket ],
-		uri: 'sip:'+phone_login+'@{$websocketSIP}{$websocketSIPPort}',
+		uri: 'sip:' + phone_login + '@' + $websocketSIPExpression + $websocketSIPPortJSON,
 		$socketParams
 		session_timers: false,
-		registrar_server: '$websocketSIP',
+		registrar_server: $websocketSIPExpression,
 		use_preloaded_route: false,
 		register: true
 	};
 	
 	//init rtcninja libraries...
 	
-	phone = new JsSIP.UA(configuration);
-	} catch (ePhoneInit) {
-		console.error('WebRTC phone init failed', ePhoneInit);
-		phone = null;
-		if (typeof registrationFailed !== 'undefined') { registrationFailed = true; }
-	}
-	if (!phone) {
-		// skip JsSIP event hooks when UA failed to start
-	} else {
+	var phone = new JsSIP.UA(configuration);
 	
 	phone.on('connected', function(e) {
 		//console.log('connected', e);
@@ -566,11 +543,18 @@ EOF;
 			//console.log('session::sdp', data);
 		});
 	
-		session.answer({
-			mediaConstraints: {
+		globalSession = session;
+		if (e.originator === 'remote') {
+			session.answer({
+				mediaConstraints: {
 				audio: true,
 				video: false
-			}
+				}
+			});
+		}
+		session.connection.addEventListener('track', function(event) {
+			remoteStream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+			audioElement.srcObject = remoteStream;
 		});
 		
 		session.connection.addEventListener('addstream', (event) => {
@@ -634,7 +618,6 @@ EOF;
 			type: 'error'
 		});
 	});
-	} // end if (phone)
 </script>
 EOF;
 		}
@@ -709,7 +692,7 @@ EOF;
 			</div>
 			<div class="modal-footer">
 				<button id="scButton" class="btn btn-link bold hidden">$selectAll</button>
-				<button type="button" id="scSubmit" class="btn btn-warning" disabled style="pointer-events:none;opacity:0.65;"><span class="fa fa-check-square-o" aria-hidden="true"></span> $submit</button>
+				<button id="scSubmit" class="btn btn-warning disabled"><span class="fa fa-check-square-o" aria-hidden="true"></span> $submit</button>
 			</div>
 		</div>
 	</div>
@@ -997,23 +980,22 @@ EOF;
 		$goModuleDIR = GO_MODULE_DIR;
 		$userrole = $this->userrole;
 		$_SESSION['module_dir'] = $goModuleDIR;
-		$_SESSION['campaign_id'] = (isset($_SESSION['campaign_id']) && strlen($_SESSION['campaign_id']) > 0) ? $_SESSION['campaign_id'] : '';
+		$_SESSION['campaign_id'] = (strlen($_SESSION['campaign_id']) > 0) ? $_SESSION['campaign_id'] : '';
 		
 		$phoneIsRegistered = $this->lh()->translationFor('phone_is_now_registered');
 		$registrationFailed = $this->lh()->translationFor('registration_failed_refresh');
 		
-		// Prefer WSS for TLS WebRTC ports; avoid strlen(null) notices that break JS
-		$httpsOn = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
-		$webProtocol = $httpsOn ? 'wss' : 'ws';
+		//$webProtocol = (preg_match("/Windows/", $_SERVER['HTTP_USER_AGENT'])) ? "wss" : "ws";
+		$webProtocol = \creamy\RuntimeConfig::secureRequest() ? "wss" : "ws";
 		
 		$this->goDB->where('setting', 'GO_agent_use_wss');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$useWebRTC = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
+		$useWebRTC = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['use_webrtc'] = $useWebRTC;
 		
 		$this->goDB->where('setting', 'GO_show_phones');
 		$rslt = $this->goDB->getOne('settings', 'value');
-		$showPhones = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : 0;
+		$showPhones = (strlen($rslt['value']) > 0) ? $rslt['value'] : 0;
 		$_SESSION['show_phones'] = $showPhones;
 		
 		//$this->goDB->where('setting', 'GO_modify_phones');
@@ -1024,42 +1006,43 @@ EOF;
 		if ($useWebRTC) {
 			$this->goDB->where('setting', 'GO_agent_wss');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketURL = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
+			$websocketURL = (strlen($rslt['value']) > 0) ? $rslt['value'] : "webrtc.goautodial.com";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketPORT = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "10443";
-			if (preg_match('/^(443|4443|8443|10443)$/', (string) $websocketPORT)) {
-				$webProtocol = 'wss';
-			}
+			$websocketPORT = (strlen($rslt['value']) > 0) ? $rslt['value'] : "10443";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$websocketSIP = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? "{$rslt['value']}" : "'+server_ip";
+			$websocketSIPExpression = (strlen($rslt['value']) > 0)
+				? json_encode($rslt['value'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : "server_ip";
 			
 			$this->goDB->where('setting', 'GO_agent_wss_sip_port');
 			$rslt = $this->goDB->getOne('settings', 'value');
 			$websocketSIPPort = "";
-			if (!preg_match("/server_ip/", $websocketSIP)) {
-				if (isset($rslt['value']) && strlen((string) $rslt['value']) > 0 && $rslt['value'] > 0 && $rslt['value'] != 5060) {
-					$websocketSIPPort = ":{$rslt['value']}'";
-				} else {
-					$websocketSIPPort = "'";
-				}
+			if (ctype_digit((string) $rslt['value']) && (int) $rslt['value'] > 0 && (int) $rslt['value'] <= 65535 && (int) $rslt['value'] !== 5060) {
+				$websocketSIPPort = ':' . (int) $rslt['value'];
 			}
-			
+			$websocketSIPPortJSON = json_encode($websocketSIPPort);
+			$websocketURIJSON = json_encode("{$webProtocol}://{$websocketURL}:{$websocketPORT}/", JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+			$phoneLoginJSON = json_encode($_SESSION['phone_login'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+
 			$this->goDB->where('setting', 'GO_agent_domain');
 			$rslt = $this->goDB->getOne('settings', 'value');
-			$domain = (isset($rslt['value']) && strlen((string) $rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
+			$domain = (strlen($rslt['value']) > 0) ? $rslt['value'] : "goautodial.com";
 		}
 		
 		
+		$str = '';
 		$phone_login = $_SESSION['phone_login'];
 		$phone_pass = $_SESSION['phone_pass'];
 		$user_id = $_SESSION['user'];
 		$this->astDB->where('user', $user_id);
 		$rslt = $this->astDB->getOne('vicidial_users', 'pass,pass_hash');
 		$user_pass = (strlen($rslt['pass']) > 0) ? $rslt['pass'] : $rslt['pass_hash'];
+		$phonePassJSON = json_encode($phone_pass, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+		$userIDJSON = json_encode($user_id, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+		$userPassJSON = json_encode($user_pass, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 		
 		if ($useWebRTC) {
 			$display_name = $_SESSION['user'];
@@ -1078,20 +1061,20 @@ EOF;
 	var remoteStream;
 	var globalSession;
 	var phone;
-	var phone_login = '$phone_login';
-	var phone_pass = '$phone_pass';
-	var uName = '$user_id';
-	var uPass = '$user_pass';
+	var phone_login = $phoneLoginJSON;
+	var phone_pass = $phonePassJSON;
+	var uName = $userIDJSON;
+	var uPass = $userPassJSON;
 	var configuration;
 	
 	function registerPhone(phone_login, pass) {
-		var socket = new JsSIP.WebSocketInterface('{$webProtocol}://{$websocketURL}:{$websocketPORT}/');
+		var socket = new JsSIP.WebSocketInterface($websocketURIJSON);
 		configuration = {
 			sockets : [ socket ],
-			uri: 'sip:'+phone_login+'@{$websocketSIP}{$websocketSIPPort}',
+			uri: 'sip:' + phone_login + '@' + $websocketSIPExpression + $websocketSIPPortJSON,
 			$socketParams
 			session_timers: false,
-			registrar_server: '$websocketSIP',
+			registrar_server: $websocketSIPExpression,
 			use_preloaded_route: false,
 			register: true
 		};
@@ -1204,11 +1187,18 @@ EOF;
 				console.log('session::sdp', data);
 			});
 		
-			session.answer({
-				mediaConstraints: {
-					audio: true,
-					video: false
-				}
+			globalSession = session;
+			if (e.originator === 'remote') {
+				session.answer({
+					mediaConstraints: {
+						audio: true,
+						video: false
+					}
+				});
+			}
+			session.connection.addEventListener('track', function(event) {
+				remoteStream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([event.track]);
+				audioElement.srcObject = remoteStream;
 			});
 		
 			session.connection.addEventListener('addstream', (event) => {
@@ -1244,6 +1234,7 @@ EOF;
 		
 		phone.on('registrationFailed', function(e) {
 			console.log('registrationFailed', e);
+			phoneRegistered = false;
 			if ( !!$.prototype.snackbar ) {
 				$.snackbar({content: "<i class='fa fa-exclamation-triangle fa-lg text-danger' aria-hidden='true'></i>&nbsp; $registrationFailed", timeout: 5000});
 			}
@@ -1305,9 +1296,6 @@ EOF;
 		//close connection
 		curl_close($ch);
 		
-		if (!is_object($result) || !isset($result->data)) {
-			return (object)['labels' => (object)[], 'disable_alter_custphone' => ''];
-		}
 		return $result->data;
 	}
 	
@@ -1360,7 +1348,7 @@ EOF;
 		return '<li style="text-align: left; !important;"><a href="'.$link.'"><i class="fa fa-'.$icon.' text-'.$tint.'"></i><b>'.$shortText.'</b></a></li>';
 	}
 	
-	private function getTopbarSimpleElementWithDate($text, $date, $icon, $link, $tint = CRM_UI_STYLE_DEFAULT, $title, $isPhone = false) {
+	private function getTopbarSimpleElementWithDate($text, $date, $icon, $link, $tint = CRM_UI_STYLE_DEFAULT, $title = '', $isPhone = false) {
 	    $shortText = strlen($text) > 25 ? substr($text,0,25)."..." : $text;
 		//$relativeTime = $this->ui()->relativeTime($date, 1);
 		$relativeTime = $date;
@@ -1441,8 +1429,8 @@ EOF;
 		curl_setopt($ch, CURLOPT_POST, count($fields));
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $fields_string);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		
 		//execute post
 		$data = curl_exec($ch);

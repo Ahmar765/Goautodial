@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteDialStatus.php
  * @brief       Handles Delete Dial Status Requests

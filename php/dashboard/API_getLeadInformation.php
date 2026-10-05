@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
     ####################################################
     #### Name: GetLeadInformation.php               ####
     #### Type: API for dashboard php encode         ####
@@ -35,7 +37,7 @@
     curl_setopt($ch, CURLOPT_TIMEOUT, 100);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     $data = curl_exec($ch);
     curl_close($ch);
 

@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 	require_once('./php/UIHandler.php');
 	require_once('./php/APIHandler.php');
 	require_once('./php/CRMDefaults.php');
@@ -24,14 +26,19 @@
 <html>
     <head>
         <meta charset="UTF-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-        <meta http-equiv="Pragma" content="no-cache">
         <title>GOautodial - Bulk Lead Importer (CSV & XLSX)</title>
         <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
-        <?php
-			print $ui->standardizedThemeCSS();
-			print $ui->creamyThemeCSS();
-		?>
+        <link href="css/bootstrap.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/font-awesome.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/ionicons.min.css" rel="stylesheet" type="text/css" />
+        <link href="css/creamycrm.css" rel="stylesheet" type="text/css" />
+        <?php print $ui->creamyThemeCSS(); ?>
+    	<link href="css/circle-buttons.css" rel="stylesheet" type="text/css" />
+        <link rel="stylesheet" href="css/customizedLoader.css">
+        <link rel="stylesheet" href="js/dashboard/sweetalert/dist/sweetalert.css">
+
+        <script src="js/jquery.min.js"></script>
+        <script src="js/bootstrap.min.js" type="text/javascript"></script>
         <script src="js/app.min.js" type="text/javascript"></script>
         <script src="js/dashboard/sweetalert/dist/sweetalert.min.js"></script>
         
@@ -106,33 +113,6 @@
             }
             .badge-csv { background: #27ae60; color: #fff; }
             .badge-xlsx { background: #2980b9; color: #fff; }
-            /* Lead import page: keep profile sidebar off-canvas; normal copyright footer */
-            .wrapper .control-sidebar.control-sidebar-dark {
-                position: fixed;
-                top: 0;
-                right: -230px;
-                width: 230px;
-                z-index: 1040;
-                transition: right 0.3s ease-in-out;
-            }
-            .wrapper .control-sidebar.control-sidebar-dark.control-sidebar-open {
-                right: 0;
-            }
-            .wrapper .control-sidebar-bg {
-                position: fixed;
-                z-index: 1035;
-                top: 0;
-                right: 0;
-                width: 0;
-                height: 0;
-            }
-            body.control-sidebar-open .control-sidebar-bg {
-                width: 100%;
-                height: 100%;
-            }
-            footer.main-footer {
-                clear: both;
-            }
         </style>
 
         <script type="text/javascript">
@@ -315,12 +295,10 @@
                     </form>
 
 				<?php } else { print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission")); } ?>
-                </section><!-- /.content -->
-            </aside><!-- /.right-side -->
+                </section>
+            </aside>
 			<?php print $ui->getRightSidebar($user->getUserId(), $user->getUserName(), $user->getUserAvatar()); ?>
-        </div><!-- ./wrapper -->
-
-		<?php print $ui->creamyFooter(); ?>
+        </div>
 
 		<script type="text/javascript">
             // Lead fields definition
@@ -423,47 +401,13 @@
                         }
                     });
 
-                    // If Phone isn't mapped or mapped column is empty, auto-pick best phone column
-                    var phoneCol = (mapping.phone_number !== '' && mapping.phone_number != null)
-                        ? parseInt(mapping.phone_number, 10) : -1;
-                    var phonesFound = phoneCol >= 0 ? countPhoneLikeInColumn(phoneCol, 200) : 0;
-
-                    if (phonesFound < 1) {
-                        var autoPhone = findBestPhoneColumn({});
-                        if (autoPhone >= 0 && countPhoneLikeInColumn(autoPhone, 200) > 0) {
-                            phoneCol = autoPhone;
-                            mapping.phone_number = String(autoPhone);
-                            $('#map_phone_number').val(String(autoPhone));
-                            phonesFound = countPhoneLikeInColumn(phoneCol, 200);
-                            phoneMapped = true;
-                            renderPreviewTable();
-                        }
-                    }
-
-                    if (!phoneMapped || phoneCol < 0) {
+                    if (!phoneMapped) {
                         swal('Mapping Error', 'You must map a column to the required "Phone Number" field.', 'error');
-                        return;
-                    }
-
-                    if (phonesFound < 1) {
-                        var samples = [];
-                        for (var si = 0; si < Math.min(3, parsedData.length); si++) {
-                            samples.push(String(parsedData[si][phoneCol] == null ? '' : parsedData[si][phoneCol]));
-                        }
-                        var colName = parsedHeaders[phoneCol] || ('column ' + (phoneCol + 1));
-                        swal(
-                            'No Phone Numbers',
-                            'Column "' + colName + '" does not look like phone data.\n' +
-                            'Samples: ' + (samples.join(' | ') || '(empty)') + '\n\n' +
-                            'In the mapping table, set Phone Number to the spreadsheet column that has numbers like 5551234567, then check the preview.',
-                            'error'
-                        );
                         return;
                     }
 
                     // Convert mapped rows to CSV Blob
                     var csvContent = generateCSVFromData(parsedData, mapping);
-
                     var csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 
                     var formData = new FormData();
@@ -471,59 +415,45 @@
                     formData.append('list_id', listId);
                     formData.append('goDupcheck', $('#dup_check').val());
                     formData.append('phone_code_override', $('#phone_code_override').val());
-                    formData.append('update_existing', '1');
                     formData.append('LeadMapSubmit', '1');
 
                     // Show loader modal
                     swal({
                         title: "Uploading Leads...",
-                        text: "Importing " + phonesFound + " phone row(s) into list " + listId + "…",
+                        text: "Please wait while your leads are imported into the campaign list.",
                         type: "info",
                         showConfirmButton: false,
                         allowOutsideClick: false
                     });
 
                     $.ajax({
-                        url: './php/AddLoadLeads.php?v=20260329',
+                        url: './php/AddLoadLeads.php',
                         type: 'POST',
                         data: formData,
                         processData: false,
                         contentType: false,
-                        cache: false,
                         success: function(response) {
                             try {
                                 var res = typeof response === 'object' ? response : JSON.parse(response);
-                                var inserted = parseInt(res.inserted || 0, 10) || 0;
-                                var updated = parseInt(res.updated || 0, 10) || 0;
-                                var skipped = parseInt(res.skipped || 0, 10) || 0;
-                                var detail = res.msg || '';
-                                var ok = (inserted > 0 || updated > 0);
-                                if (ok) {
+                                if (res.result === 'success' || res.result === '1' || res.result === 1) {
+                                    var dupsText = res.dups ? ' (Duplicates Skipped: ' + res.dups + ')' : '';
+                                    var insertedText = res.inserted ? res.inserted : parsedData.length;
                                     swal({
                                         title: "Upload Successful!",
-                                        text: detail + "\n\nOpening All Leads…",
+                                        text: "Successfully processed leads for List " + listId + ".\n" + res.msg + dupsText,
                                         type: "success"
                                     }, function() {
-                                        window.location.href = './telephonyleads.php?list_id=' + encodeURIComponent(listId);
+                                        window.location.reload();
                                     });
                                 } else {
-                                    swal({
-                                        title: "0 Leads Imported",
-                                        text: detail || ("Mapped " + phonesFound + " phones but none were saved. Remap Phone / Name / Email."),
-                                        type: "warning"
-                                    });
+                                    swal("Upload Notice", res.msg || "Leads submitted to dialer.", "info");
                                 }
                             } catch(err) {
-                                swal("Error", "Unexpected response from server.", "error");
+                                swal("Success!", "Lead import request sent successfully.", "success");
                             }
                         },
                         error: function(xhr, status, error) {
-                            var tip = '';
-                            try {
-                                var r = JSON.parse(xhr.responseText || '{}');
-                                if (r.msg) tip = r.msg;
-                            } catch (e) {}
-                            swal("Error", tip || ("Failed to upload leads: " + error), "error");
+                            swal("Error", "Failed to upload leads: " + error, "error");
                         }
                     });
                 });
@@ -569,17 +499,7 @@
                     }
 
                     parsedHeaders = json[0].map(h => String(h || '').trim());
-                    var colCount = parsedHeaders.length;
-                    parsedData = json.slice(1)
-                        .filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== ''))
-                        .map(function(row) {
-                            // Pad sparse SheetJS rows so mapped column indexes stay valid
-                            var padded = [];
-                            for (var i = 0; i < colCount; i++) {
-                                padded[i] = (row[i] !== undefined && row[i] !== null) ? row[i] : '';
-                            }
-                            return padded;
-                        });
+                    parsedData = json.slice(1).filter(row => row && row.length > 0 && row.some(cell => cell !== null && cell !== ''));
 
                     $('#file_info_count').text(parsedData.length + ' rows detected');
                     $('#file_info_panel').slideDown();
@@ -605,122 +525,8 @@
                 $('#mapping_and_preview_section').slideUp();
             }
 
-            function cleanHeader(h) {
-                return String(h || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            }
-
-            /** Normalize a cell to digits-only phone, or '' if not phone-like. */
-            function extractPhoneDigits(raw) {
-                var s = String(raw == null ? '' : raw).trim();
-                if (!s) return '';
-                // Skip addresses / multi-word text (street lines look phone-y after digit strip)
-                if (/[a-zA-Z]{2,}/.test(s) && /\s/.test(s)) return '';
-                if (/[a-zA-Z]{4,}/.test(s) && !/@/.test(s)) return ''; // names, cities
-                if (/^\d+(\.\d+)?e[+\-]?\d+$/i.test(s)) {
-                    s = String(Math.round(Number(s)));
-                } else if (/^\d+\.0+$/.test(s)) {
-                    s = s.replace(/\.0+$/, '');
-                }
-                var digits = s.replace(/\D+/g, '');
-                if (digits.length < 7 || digits.length > 15) return '';
-                return digits;
-            }
-
-            function countPhoneLikeInColumn(colIdx, sampleLimit) {
-                var limit = sampleLimit || 50;
-                var hits = 0;
-                var n = Math.min(parsedData.length, limit);
-                for (var i = 0; i < n; i++) {
-                    if (extractPhoneDigits(parsedData[i][colIdx])) hits++;
-                }
-                return hits;
-            }
-
-            /** Best column that actually contains phone numbers (by cell content). */
-            function findBestPhoneColumn(exclude) {
-                exclude = exclude || {};
-                var bestIdx = -1;
-                var bestHits = 0;
-                parsedHeaders.forEach(function(header, idx) {
-                    if (exclude[idx]) return;
-                    var hits = countPhoneLikeInColumn(idx);
-                    // Prefer header that mentions phone/mobile when scores are close
-                    var h = cleanHeader(header);
-                    var headerBonus = (h.indexOf('phone') >= 0 || h.indexOf('mobile') >= 0 || h.indexOf('cell') >= 0 || h === 'tel' || h === 'telephone') ? 2 : 0;
-                    var score = hits + headerBonus;
-                    if (hits > 0 && score > bestHits) {
-                        bestHits = score;
-                        bestIdx = idx;
-                    }
-                });
-                return bestIdx;
-            }
-
-            // Map common Excel headers → CRM fields (phone, name, email, …)
-            function headerMatchesField(fieldKey, header) {
-                var h = cleanHeader(header);
-                var f = cleanHeader(fieldKey);
-                if (!h) return false;
-                if (h === f) return true;
-
-                var aliases = {
-                    phone_number: [
-                        'phone', 'phonenumber', 'mobile', 'mobilenumber', 'telephone', 'tel',
-                        'cell', 'cellphone', 'contactnumber', 'contactno', 'msisdn',
-                        'phone1', 'primaryphone', 'phoneno', 'ph', 'workphone', 'homephone',
-                        'cellphone', 'mainphone', 'callerid', 'ani'
-                    ],
-                    first_name: [
-                        'firstname', 'first', 'fname', 'givenname', 'forename',
-                        'name', 'fullname', 'fullname', 'customername', 'clientname',
-                        'contactname', 'fullname', 'contact'
-                    ],
-                    last_name: [
-                        'lastname', 'last', 'lname', 'surname', 'familyname'
-                    ],
-                    email: [
-                        'email', 'emailaddress', 'emailid', 'mail', 'emailid',
-                        'emailaddr', 'primaryemail', 'workemail'
-                    ],
-                    middle_initial: ['middle', 'middleinitial', 'mi', 'middlename'],
-                    alt_phone: ['altphone', 'alternatephone', 'phone2', 'secondaryphone', 'otherphone'],
-                    city: ['city', 'town'],
-                    state: ['state', 'region', 'st'],
-                    postal_code: ['postal', 'postalcode', 'zip', 'zipcode', 'postcode'],
-                    country_code: ['country', 'countrycode', 'countryname'],
-                    address1: ['address', 'address1', 'addressline1', 'street', 'streetaddress'],
-                    address2: ['address2', 'addressline2'],
-                    comments: ['comments', 'comment', 'notes', 'note', 'remark', 'remarks'],
-                    // Do NOT alias bare "id" / "number" — they steal phone/name columns
-                    vendor_lead_code: ['vendor', 'vendorleadcode', 'vendorcode', 'leadcode', 'leadid', 'vendorid'],
-                    province: ['province'],
-                    gender: ['gender', 'sex'],
-                    date_of_birth: ['dateofbirth', 'dob', 'birthday', 'birthdate']
-                };
-
-                if (aliases[fieldKey] && aliases[fieldKey].indexOf(h) !== -1) {
-                    return true;
-                }
-                if (fieldKey === 'email' && h.indexOf('email') !== -1) return true;
-                if (fieldKey === 'phone_number' && (h.indexOf('phone') !== -1 || h.indexOf('mobile') !== -1 || h.indexOf('cell') !== -1)) return true;
-                return false;
-            }
-
-            function isFullNameHeader(header) {
-                var h = cleanHeader(header);
-                return ['name', 'fullname', 'fullname', 'customername', 'clientname', 'contactname', 'fullname', 'contact'].indexOf(h) !== -1;
-            }
-
             function renderMappingTable() {
                 var html = '';
-                var claimed = {};
-
-                // Resolve phone first from real cell values (headers alone are unreliable)
-                var phoneFromData = findBestPhoneColumn({});
-                if (phoneFromData >= 0) {
-                    claimed[phoneFromData] = true;
-                }
-
                 leadFields.forEach(function(field) {
                     var selectId = 'map_' + field.key;
                     html += '<tr>';
@@ -729,56 +535,32 @@
                     html += '    <select class="form-control mapping-select" id="' + selectId + '" onchange="renderPreviewTable();">';
                     html += '      <option value="">-- Ignore / Do Not Import --</option>';
 
+                    // Auto match column name
                     var autoSelected = false;
-                    var autoIdx = -1;
-
-                    if (field.key === 'phone_number' && phoneFromData >= 0) {
-                        autoIdx = phoneFromData;
-                    } else {
-                        parsedHeaders.forEach(function(header, idx) {
-                            if (claimed[idx]) return;
-                            if (headerMatchesField(field.key, header)) {
-                                if (field.key === 'last_name' && isFullNameHeader(header)) {
-                                    return;
-                                }
-                                autoIdx = idx;
-                            }
-                        });
-
-                        if (autoIdx < 0 && field.key === 'first_name') {
-                            parsedHeaders.forEach(function(header, idx) {
-                                if (claimed[idx]) return;
-                                if (isFullNameHeader(header)) autoIdx = idx;
-                            });
-                        }
-                    }
-
                     parsedHeaders.forEach(function(header, idx) {
-                        var selected = '';
-                        if (!autoSelected && idx === autoIdx) {
-                            selected = 'selected';
-                            autoSelected = true;
-                            claimed[idx] = true;
-                        }
-                        var phoneHits = field.key === 'phone_number' ? countPhoneLikeInColumn(idx, 20) : 0;
-                        var hint = phoneHits > 0 ? ' (' + phoneHits + ' phones)' : '';
-                        html += '      <option value="' + idx + '" ' + selected + '>' + (idx + 1) + '. ' + header + hint + '</option>';
+                        var cleanH = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        var cleanF = field.key.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        var match = (cleanH === cleanF) || 
+                                    (cleanF === 'phonenumber' && (cleanH === 'phone' || cleanH === 'mobile' || cleanH === 'telephone' || cleanH === 'cell')) ||
+                                    (cleanF === 'firstname' && (cleanH === 'first' || cleanH === 'name')) ||
+                                    (cleanF === 'lastname' && cleanH === 'last') ||
+                                    (cleanF === 'postalcode' && (cleanH === 'zip' || cleanH === 'zipcode'));
+
+                        var selected = (match && !autoSelected) ? 'selected' : '';
+                        if (selected) autoSelected = true;
+
+                        html += '      <option value="' + idx + '" ' + selected + '>' + (idx + 1) + '. ' + header + '</option>';
                     });
 
                     html += '    </select>';
                     html += '  </td>';
                     html += '  <td id="status_' + field.key + '">';
-                    if (field.key === 'phone_number' && autoIdx >= 0) {
-                        html += '<span class="label label-success">Auto · ' + countPhoneLikeInColumn(autoIdx) + ' phones</span>';
-                    } else {
-                        html += field.required ? '<span class="label label-danger">Required</span>' : '<span class="label label-default">Optional</span>';
-                    }
+                    html += field.required ? '<span class="label label-danger">Required</span>' : '<span class="label label-default">Optional</span>';
                     html += '  </td>';
                     html += '</tr>';
                 });
 
                 $('#mapping_rows').html(html);
-                renderPreviewTable();
             }
 
             function renderPreviewTable() {
@@ -790,7 +572,7 @@
                     var colIdx = $('#map_' + field.key).val();
                     if (colIdx !== '' && colIdx !== null) {
                         thead += '<th>' + field.label + '</th>';
-                        activeFields.push({ key: field.key, colIdx: parseInt(colIdx, 10) });
+                        activeFields.push({ key: field.key, colIdx: parseInt(colIdx) });
                     }
                 });
                 thead += '</tr>';
@@ -812,74 +594,25 @@
             function generateCSVFromData(data, mapping) {
                 var headers = [];
                 var colIndices = [];
-                var fullNameIdx = null;
-
-                // If first_name maps to a Full Name column and last_name is empty, split on import
-                if (mapping.first_name !== '' && mapping.first_name != null &&
-                    (mapping.last_name === '' || mapping.last_name == null)) {
-                    var h = parsedHeaders[parseInt(mapping.first_name, 10)];
-                    if (isFullNameHeader(h)) {
-                        fullNameIdx = parseInt(mapping.first_name, 10);
-                    }
-                }
 
                 leadFields.forEach(function(field) {
                     var idx = mapping[field.key];
                     if (idx !== '' && idx !== null && idx !== undefined) {
                         headers.push(field.key);
-                        colIndices.push({ key: field.key, idx: parseInt(idx, 10) });
+                        colIndices.push({ key: field.key, idx: parseInt(idx) });
                     }
                 });
-
-                // Ensure first_name + last_name columns exist when splitting a Name column
-                if (fullNameIdx !== null) {
-                    if (headers.indexOf('first_name') === -1) {
-                        headers.push('first_name');
-                        colIndices.push({ key: 'first_name', idx: fullNameIdx, split: 'first' });
-                    } else {
-                        colIndices.forEach(function(item) {
-                            if (item.key === 'first_name') item.split = 'first';
-                        });
-                    }
-                    if (headers.indexOf('last_name') === -1) {
-                        headers.push('last_name');
-                        colIndices.push({ key: 'last_name', idx: fullNameIdx, split: 'last' });
-                    }
-                }
-
-                function csvEscape(val) {
-                    val = String(val == null ? '' : val).trim();
-                    if (val.indexOf(',') !== -1 || val.indexOf('"') !== -1 || val.indexOf('\n') !== -1) {
-                        val = '"' + val.replace(/"/g, '""') + '"';
-                    }
-                    return val;
-                }
 
                 var csvLines = [headers.join(',')];
 
                 data.forEach(function(row) {
                     var line = colIndices.map(function(item) {
                         var val = (row[item.idx] !== undefined && row[item.idx] !== null) ? String(row[item.idx]).trim() : '';
-                        // Coerce Excel scientific / float phones for the phone columns
-                        if ((item.key === 'phone_number' || item.key === 'alt_phone') && val !== '') {
-                            var digits = extractPhoneDigits(val);
-                            if (digits) {
-                                val = digits;
-                            } else if (/^\d+(\.\d+)?e[+\-]?\d+$/i.test(val)) {
-                                val = String(Math.round(Number(val)));
-                            } else if (/^\d+\.0+$/.test(val)) {
-                                val = val.replace(/\.0+$/, '');
-                            }
+                        // Escape CSV quotes and commas
+                        if (val.indexOf(',') !== -1 || val.indexOf('"') !== -1 || val.indexOf('\n') !== -1) {
+                            val = '"' + val.replace(/"/g, '""') + '"';
                         }
-                        if (item.split === 'first' || item.split === 'last') {
-                            var parts = val.split(/\s+/).filter(Boolean);
-                            if (item.split === 'first') {
-                                val = parts.length ? parts[0] : '';
-                            } else {
-                                val = parts.length > 1 ? parts.slice(1).join(' ') : '';
-                            }
-                        }
-                        return csvEscape(val);
+                        return val;
                     });
                     csvLines.push(line.join(','));
                 });

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteVoicemail.php
  * @brief       Handles Delete Voicemail Requests

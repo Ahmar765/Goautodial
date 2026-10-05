@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifySettingsPhones.php
  * @brief       Modify specific phone extension

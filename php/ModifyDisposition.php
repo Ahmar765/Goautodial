@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifyPauseCode.php
  * @brief       Handles modifying pause codes requests

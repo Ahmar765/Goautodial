@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getSalesAgent.php
  * @brief       Displays Sales Agent Report on Dashboard Statewide Customization

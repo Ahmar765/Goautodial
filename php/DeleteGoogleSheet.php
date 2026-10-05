@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteGoogleSheet.php
  * @brief       Handles Delete to Google Sheet Request

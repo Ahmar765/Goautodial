@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifySscript.php
  * @brief       Handles modifying specific scripts

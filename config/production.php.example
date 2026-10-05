@@ -1,0 +1,42 @@
+<?php
+// Copy OUTSIDE the application directory, e.g. /etc/goautodial/production.php.
+// Set GOAUTODIAL_CONFIG_FILE in the PHP FPM pool and CLI job environment.
+// Environment variables override these values. Never commit the completed file.
+return array(
+    'APP_ENV' => 'production',
+    'APP_URL' => 'https://crm.example.com',
+    'GO_API_URL' => 'https://dialer.example.com/goAPIv2',
+    'GO_API_USER' => '',
+    'GO_API_PASSWORD' => '',
+    'DB_HOST' => '10.20.0.20',
+    'DB_PORT' => '3306',
+    'DB_NAME' => 'goautodial',
+    'DB_USER' => '',
+    'DB_PASS' => '',
+    'DB_HOST_ASTERISK' => '10.20.0.20',
+    'DB_PORT_ASTERISK' => '3306',
+    'DB_NAME_ASTERISK' => 'asterisk',
+    'DB_USER_ASTERISK' => '',
+    'DB_PASS_ASTERISK' => '',
+    'DB_HOST_KAMAILIO' => '10.20.0.20',
+    'DB_PORT_KAMAILIO' => '3306',
+    'DB_NAME_KAMAILIO' => 'kamailio',
+    'DB_USERNAME_KAMAILIO' => '',
+    'DB_PASSWORD_KAMAILIO' => '',
+    'CRM_ADMIN_EMAIL' => 'operations@example.com',
+    'SESSION_DRIVER' => 'database',
+    // Generate using: php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+    'SESSION_ENCRYPTION_KEY' => '',
+    // Comma-separated exact proxy IP addresses; leave empty for direct HTTPS.
+    'TRUSTED_PROXIES' => '',
+    // Required only if using modules/GOagent/jsSIP.php. Browser input cannot choose the credential destination.
+    'SIP_DOMAIN' => 'sip.example.com',
+    'SIP_WS_HOST' => 'sip.example.com',
+    'SIP_WS_PORT' => '8089',
+    // Optional integration endpoints. Configure provider credentials separately.
+    'WHATSAPP_SEND_URL' => '',
+    'WHATSAPP_WEBHOOK_URL' => '',
+    // Required only for legacy SMTP password encryption; coordinate with goAPIv2.
+    'SMTP_ENCRYPTION_SECRET' => '',
+    'SMTP_ENCRYPTION_IV_SECRET' => ''
+);

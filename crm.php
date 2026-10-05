@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		crm.php
  * @brief 		Manage leads and contacts

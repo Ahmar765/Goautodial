@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifyFilter.php
  * @brief       Handles modifying specific filters

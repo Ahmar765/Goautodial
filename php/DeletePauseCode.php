@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeletePauseCode.php
  * @brief       Handles Delete Pause Code Requests

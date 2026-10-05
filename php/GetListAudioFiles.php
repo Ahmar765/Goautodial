@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        GetLeadsOnHopper.php
  * @brief       Handles Leads on the hopper variables

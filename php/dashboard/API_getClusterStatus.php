@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getClusterStatus.php
  * @brief       Displays server status

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ViewLeadRecycling.php
  * @brief       Handles custom lead recycling variables and HTML

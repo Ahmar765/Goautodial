@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 /**
  * @file 		telephonyusers.php
  * @brief 		List of all user accounts
@@ -177,11 +179,11 @@
 	//var_dump("AUTH TOKEN:".$_SESSION['gad_authToken']);
 	$user_groups = $api->API_getAllUserGroups();
 	$phones = $api->API_getAllPhones();
-	$max = (!is_null($phones) && !is_null($phones->extension) && count($phones->extension) > 0) ? max($phones->extension) : 1000;
+	$max = max($phones->extension);
 	$suggested_extension = $max + 1;
-	$count_users = (!is_null($all_users) && !is_null($all_users->user)) ? count($all_users->user) : 0;
-	$license_seats = intval(!is_null($all_users) ? $all_users->licensedSeats : 0);
-	$avail_seats = $license_seats - $count_users;
+	$count_users = count($all_users->user);
+	$license_seats = intval($all_users->licensedSeats);
+	$avail_seats = $license_seats-$count_users;
 	$servers = $api->API_getAllServers();
 
 	if(ROCKETCHAT_ENABLE === 'y'){
@@ -272,8 +274,8 @@
 									<div class="col-sm-8 mb">
 										<select id="user_group" class="form-control select2-1" name="user_group" style="width:100%;">
 											<?php
-												for($i=0;$i<(!is_null($user_groups) && !is_null($user_groups->user_group) ? count($user_groups->user_group) : 0);$i++){
-													if (strtoupper($_SESSION['usergroup']) !== 'ADMIN' && strtoupper($_SESSION['usergroup']) !== 'ADMINS' && strtoupper($_SESSION['usergroup']) !== strtoupper($user_groups->user_group[$i])) {
+												for($i=0;$i<count($user_groups->user_group);$i++){
+													if (strtoupper($_SESSION['usergroup']) !== 'ADMIN' && strtoupper($_SESSION['usergroup']) !== strtoupper($user_groups->user_group[$i])) {
 														continue;
 													}
 											?>
@@ -324,9 +326,9 @@
 								<div class="form-group">
 									<label class="col-sm-4 control-label" for="ip"><?php $lh->translateText("server_ip"); ?></label>
 									<div class="col-sm-8 mb">
-										<select name="ip" id="ip" class="form-control" <?php if(!is_null($servers) && !is_null($servers->server_id) && count($servers->server_id) > 0) echo 'required'; ?> >
+										<select name="ip" id="ip" class="form-control" required>
 											<?php
-												for($i=0;$i < (!is_null($servers) && !is_null($servers->server_id) ? count($servers->server_id) : 0);$i++){
+												for($i=0;$i < count($servers->server_id);$i++){
 											?>
 											<option value="<?php echo $servers->server_ip[$i];?>">
 												<?php echo $servers->server_ip[$i].' - '.$servers->server_id[$i].' - '.$servers->server_description[$i];?>
@@ -425,7 +427,7 @@
 											<option value="ALL">ALL USER GROUPS</option>
 											<?php
 											}
-												for($i=0; $i < (!is_null($user_groups) && !is_null($user_groups->user_group) ? count($user_groups->user_group) : 0); $i++){
+												for($i=0; $i < count($user_groups->user_group); $i++){
 													if (strtoupper($_SESSION['usergroup']) !== 'ADMIN' && strtoupper($_SESSION['usergroup']) !== strtoupper($user_groups->user_group[$i])) {
 														continue;
 													}
@@ -442,7 +444,7 @@
 									<div class="col-sm-8 mb">
 										<select name="ip" id="ip" class="form-control" required>
 											<?php
-												for($i=0;$i < (!is_null($servers) && !is_null($servers->server_id) ? count($servers->server_id) : 0);$i++){
+												for($i=0;$i < count($servers->server_id);$i++){
 											?>
 											<option value="<?php echo $servers->server_ip[$i];?>">
 												<?php echo $servers->server_ip[$i].' - '.$servers->server_id[$i].' - '.$servers->server_description[$i];?>
@@ -725,11 +727,6 @@
 			onStepChanging: function (event, currentIndex, newIndex)
 			{
 				
-				// Always allow going backward without validation
-				if (currentIndex > newIndex) {
-					return true;
-				}
-				
 				// Disable next if there are duplicates
 				if(checker > 0){
 					$(".body:eq(" + newIndex + ") .error", uform).addClass("error");
@@ -759,20 +756,12 @@
 					$(".body:eq(" + newIndex + ") .error", uform).removeClass("error");
 				}
 
-				// Only validate fields in the CURRENT step, not the whole form
-				uform.validate().settings.ignore = ":disabled,:hidden";
-				var currentFieldset = $("fieldset:eq(" + currentIndex + ")", uform);
-				var isValid = true;
-				currentFieldset.find("input,select,textarea").not(":disabled,:hidden").each(function() {
-					if (!uform.validate().element(this)) {
-						isValid = false;
-					}
-				});
-				return isValid;
+				uform.validate().settings.ignore = ":disabled";
+				return uform.valid();
 			},
 			onFinishing: function (event, currentIndex)
 			{
-				uform.validate().settings.ignore = ":disabled,:hidden";
+				uform.validate().settings.ignore = ":disabled";
 				return uform.valid();
 			},
 			onFinished: function (event, currentIndex)
@@ -837,7 +826,7 @@
 			},
 			onFinishing: function (event, currentIndex)
 			{
-				pform.validate().settings.ignore = ":disabled,:hidden";
+				pform.validate().settings.ignore = ":disabled";
 				return pform.valid();
 			},
 			onFinished: function (event, currentIndex)

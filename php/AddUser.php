@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddUser.php
  * @brief       Handles Add User variables
@@ -45,7 +47,8 @@
 
     	$output = $api->API_addUser($postfields);
 	
-	if ($output->result=="success") { 
+	if (is_object($output) && ($output->result ?? '') === "success") { 
+		if (ROCKETCHAT_ENABLE === 'y') {
 		//insert curl rocketchat insert; POST: email, name, password, username; HEADER: xauth xtoken
 		$authToken = $_SESSION['gad_authToken'];//"Azve2taXDIxZiIkFYvs-yWIBfLd3lLGOkezRFKPGxt3";
 		$userID = $_SESSION['gad_userID'];//"4yM7o5Feayn9uWj7j";
@@ -61,12 +64,13 @@
 	        CURLOPT_RETURNTRANSFER => true,
 	        CURLOPT_ENCODING => "",
 	        CURLOPT_MAXREDIRS => 10,
-	        CURLOPT_TIMEOUT => 0,
-	        CURLOPT_FOLLOWLOCATION => true,
+	        CURLOPT_CONNECTTIMEOUT => 5,
+	        CURLOPT_TIMEOUT => 30,
+	        CURLOPT_FOLLOWLOCATION => false,
 	        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
 	        CURLOPT_CUSTOMREQUEST => "POST",
-			CURLOPT_SSL_VERIFYHOST => false,
-			CURLOPT_SSL_VERIFYPEER => false,
+			CURLOPT_SSL_VERIFYHOST => 2,
+			CURLOPT_SSL_VERIFYPEER => true,
 	        CURLOPT_POSTFIELDS =>"{\r\n  \"email\": \"$email\",\r\n  \"name\": \"$full_name\",\r\n  \"password\": \"$password\",\r\n  \"username\": \"$username\",\r\n  \"roles\": [\"$roles\"]}",
 	        CURLOPT_HTTPHEADER => array(
         	        "Content-Type:application/json", "X-Auth-Token:$authToken", "X-User-Id:$userID"
@@ -75,6 +79,7 @@
 	        $response = curl_exec($curl);
         	curl_close($curl);
 		//echo $output = $response;
+		}
         	$status = 1;
 		//echo json_encode($data);	
 		/*if($data === true)
@@ -82,7 +87,7 @@
 		else
 		$status = $output;*/
 	} 
-	else { $status = $output->result; }
+	else { $status = is_object($output) ? ($output->result ?? 'error') : 'error'; }
 	
 	echo json_encode($status);
 

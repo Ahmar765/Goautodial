@@ -1,4 +1,6 @@
-<?php 
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+ 
 	// /** Search Leads API - get list Leads */
 	// /**
 	//  * Generates action circle buttons for different pages/module

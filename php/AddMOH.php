@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddMOH.php
  * @brief       Handles Add MOH Requests

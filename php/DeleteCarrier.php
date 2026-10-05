@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteCarrier.php
  * @brief       Handles Delete Carrier Requests

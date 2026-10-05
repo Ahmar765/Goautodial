@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifyAgentRank.php
  * @brief       Handles Modify Requests for Agent Ranks

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddDialStatus.php
  * @brief       Handles Add Dial Status Request

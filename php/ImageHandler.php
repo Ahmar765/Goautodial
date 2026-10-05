@@ -111,36 +111,16 @@ class ImageHandler {
 	public function generateCustomCompanyLogoAndReturnURL($imgSrc, $imageFileType = null) {
 		$basedir = \creamy\CRMUtils::creamyBaseDirectoryPath();
 		$filename = CRM_DEFAULT_COMPANY_LOGO;	
-		$myImage = false;
-		if ($imageFileType == "jpg" || $imageFileType == "jpeg") {
-			$myImage = @imagecreatefromjpeg($imgSrc);
-		} else if ($imageFileType == "png") {
-			$myImage = @imagecreatefrompng($imgSrc);
-		} else if ($imageFileType == "gif") {
-			$myImage = @imagecreatefromgif($imgSrc);
-		}
-
-		if ($myImage === false) {
-			error_log("company logo: could not load image type=$imageFileType path=".$basedir.$filename);
-			return null;
-		}
-
+		if ($imageFileType == "jpg" || $imageFileType == "jpeg") $myImage = imagecreatefromjpeg($imgSrc);
+		else if ($imageFileType == "png") $myImage = imagecreatefrompng($imgSrc);
+		else if ($imageFileType == "gif") $myImage = imagecreatefromgif($imgSrc);
+		if (empty($myImage)) return null;
+		
 		imagealphablending($myImage, false);
 		imagesavealpha($myImage, true);
-
-		$target = $basedir . $filename;
-		$dir = dirname($target);
-		if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-			imagedestroy($myImage);
-			return null;
-		}
-
-		if (@imagepng($myImage, $target)) {
-			imagedestroy($myImage);
-			return $filename;
-		}
-		imagedestroy($myImage);
-		return null;
+		
+		if (imagepng($myImage, $basedir.$filename)) { imagedestroy($myImage); return $filename; }
+		else { imagedestroy($myImage); return null; }
 	}
 	
 	

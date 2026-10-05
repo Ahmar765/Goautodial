@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 /**
  * @file        settingsservers.php
  * @brief       Manage servers

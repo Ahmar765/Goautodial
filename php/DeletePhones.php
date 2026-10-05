@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeletePhones.php
  * @brief       Handles Delete Phones Requests

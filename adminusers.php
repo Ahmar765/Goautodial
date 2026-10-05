@@ -1,5 +1,7 @@
 
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 	/**
 		The MIT License (MIT)
 		

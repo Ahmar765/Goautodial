@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
 	The MIT License (MIT)
 	
@@ -44,6 +46,11 @@ if (!isset($_POST["new_password_2"])) {
 }
 
 if ($validated == 1) {
+	foreach (array('old_password', 'new_password_1', 'new_password_2') as $field) {
+		if (!is_string($_POST[$field]) || $_POST[$field] === '' || strlen($_POST[$field]) > 72) {
+			\creamy\Security::deny(400, 'Passwords must contain between 1 and 72 bytes.');
+		}
+	}
 	$db = new \creamy\DbHandler();
 
 	// check password	

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 
 ####################################################
 #### Name: API_EmergencyLogout.php              ####

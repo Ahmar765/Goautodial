@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        GetAreaCodes.php
  * @brief       Handles Areacode variables and HTML

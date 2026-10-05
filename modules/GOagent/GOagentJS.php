@@ -21,6 +21,8 @@
 */
 
 namespace creamy;
+require_once __DIR__ . '/../../php/RequestGuard.php';
+
 
 define('GO_AGENT_DIRECTORY', str_replace($_SERVER['DOCUMENT_ROOT'], "", dirname(__FILE__)));
 define('GO_BASE_DIRECTORY', dirname(dirname(dirname(__FILE__))));
@@ -29,40 +31,17 @@ define('GO_LANG_DIRECTORY', dirname(__FILE__) . '/lang/');
 $isAgentUI = $_SERVER['PHP_SELF'];
 require_once(GO_BASE_DIRECTORY.'/php/APIHandler.php');
 require_once(GO_BASE_DIRECTORY.'/php/CRMDefaults.php');
+require_once(GO_BASE_DIRECTORY.'/php/UIHandler.php');
 require_once(GO_BASE_DIRECTORY.'/php/LanguageHandler.php');
+require_once(GO_BASE_DIRECTORY.'/php/DbHandler.php');
 include(GO_BASE_DIRECTORY.'/php/Session.php');
 require_once(GO_BASE_DIRECTORY.'/php/goCRMAPISettings.php');
-$goAPI = (empty($_SERVER['HTTPS'])) ? str_replace('https:', 'http:', gourl) : str_replace('http:', 'https:', gourl);
+$goAPI = gourl;
 
 $api = \creamy\APIHandler::getInstance();
+$ui = \creamy\UIHandler::getInstance();
 $lh = \creamy\LanguageHandler::getInstance();
 $lh->addCustomTranslationsFromFile(GO_LANG_DIRECTORY . $lh->getLanguageHandlerLocale());
-
-/** Safe JS literal (avoids Invalid hexadecimal escape from Windows paths like C:\xampp). */
-if (!function_exists(__NAMESPACE__ . '\\go_js_str')) {
-	function go_js_str($val) {
-		$flags = JSON_UNESCAPED_UNICODE;
-		if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
-			$flags |= JSON_INVALID_UTF8_SUBSTITUTE;
-		}
-		if (is_array($val) || is_object($val)) {
-			return json_encode($val, $flags);
-		}
-		return json_encode((string) $val, $flags);
-	}
-}
-if (!function_exists(__NAMESPACE__ . '\\go_js_var')) {
-	function go_js_var($name, $val, $numeric = false) {
-		if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $name)) {
-			return;
-		}
-		if ($numeric && is_numeric($val)) {
-			echo 'var ' . $name . ' = ' . (0 + $val) . ";\n";
-			return;
-		}
-		echo 'var ' . $name . ' = ' . go_js_str($val) . ";\n";
-	}
-}
 
 $US = '_';
 $NOW_TIME = date("Y-m-d H:i:s");
@@ -70,24 +49,7 @@ $tsNOW_TIME = date("YmdHis");
 $StarTtimE = date("U");
 $FILE_TIME = date("Ymd-His");
 
-$module_dir = (!empty($module_dir)) ? $module_dir : '';
-if (!empty($module_dir)) {
-	$module_dir = str_replace('\\', '/', $module_dir);
-}
-// Normalize Windows paths so DOCUMENT_ROOT replace works (C:/ vs C:\)
-$docRoot = str_replace('\\', '/', rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/\\'));
-$goagentAbs = str_replace('\\', '/', dirname(__FILE__));
-$goagent_web_dir = (strpos($goagentAbs, $docRoot) === 0)
-	? substr($goagentAbs, strlen($docRoot))
-	: '/v4.0-master/modules/GOagent';
-if ($goagent_web_dir === '' || $goagent_web_dir[0] !== '/') {
-	$goagent_web_dir = '/' . ltrim($goagent_web_dir, '/');
-}
-$goagent_web_dir = rtrim($goagent_web_dir, '/') . '/';
-if (empty($module_dir)) {
-	$module_dir = $goagent_web_dir;
-}
-$goagent_js_url = $goagent_web_dir . 'GOagentJS.php';
+$module_dir = (!empty($module_dir)) ? $module_dir : '/modules/GOagent/';
 
 $show_letters = false; // Show letters on dial pad
 
@@ -97,26 +59,17 @@ $show_letters = false; // Show letters on dial pad
 if (!isset($_REQUEST['action']) && !isset($_REQUEST['module_name'])) {
     //$result = get_user_info($_SESSION['user']);
     $result = $api->API_getLoginInfo($_SESSION['user']);
-    if (!is_object($result)) {
-        $result = (object)[
-            'default_settings' => (object)[],
-            'user_info' => (object)[],
-            'phone_info' => (object)[],
-            'system_info' => (object)[],
-            'country_codes' => [],
-            'is_logged_in' => false,
-        ];
-    }
-    $default_settings = $result->default_settings ?? (object)[];
-    $agent = $result->user_info ?? (object)[];
-    $phone = $result->phone_info ?? (object)[];
-    $system = $result->system_info ?? (object)[];
-    $country_codes = $result->country_codes ?? [];
+    if (!is_object($result)) throw new \RuntimeException('Agent backend settings unavailable.');
+    $default_settings = $result->default_settings;
+    $agent = $result->user_info;
+    $phone = $result->phone_info;
+    $system = $result->system_info;
+    $country_codes = $result->country_codes;
     if (isset($result->camp_info)) {
         $camp_info = $result->camp_info;
     }
     
-    $_SESSION['is_logged_in'] = !empty($result->is_logged_in);
+    $_SESSION['is_logged_in'] = $result->is_logged_in;
     
     header('Content-Type: text/javascript');
 
@@ -131,102 +84,6 @@ if (!isset($_REQUEST['action']) && !isset($_REQUEST['module_name'])) {
         }
     }
     echo "// {$sess_vars}\n";
-
-    // Declare critical globals first so a later parse error / missing goAPI data cannot leave them undefined
-    echo "var AutoDialReady = 0;\n";
-    echo "var AutoDialWaiting = 0;\n";
-    echo "var DefaultALTDial = 0;\n";
-    echo "var live_customer_call = 0;\n";
-    echo "var dialingINprogress = 0;\n";
-    echo "var waiting_on_dispo = 0;\n";
-    echo "var agentcall_manual = 1;\n";
-    echo "var manual_dial_min_digits = 6;\n";
-    echo "var session_id = '';\n";
-    echo "var agent_pause_codes_active = 'N';\n";
-    echo "var allow_closers = 'Y';\n";
-    echo "var agent_lead_search_override = 'ENABLED';\n";
-    echo "var agent_lead_search = 'ENABLED';\n";
-    echo "var agent_lead_search_method = 'CAMPLISTS';\n";
-    echo "var per_call_notes = 'DISABLED';\n";
-    echo "var enable_callback_alert = 0;\n";
-    echo "var wrapup_seconds = 0;\n";
-    echo "var wrapup_counter = 0;\n";
-    echo "var wrapup_waiting = 0;\n";
-    echo "var consult_custom_wait = 0;\n";
-    echo "var consult_custom_delay = 0;\n";
-    echo "var pause_calling = 0;\n";
-    echo "var HKuser_level = 1;\n";
-    echo "var HK_statuses_camp = 0;\n";
-    echo "var hotkeys_active = 0;\n";
-    echo "var hotkeys = {};\n";
-    echo "var hotkeys_content = {};\n";
-    echo "var LIVE_campaign_recording = 'NEVER';\n";
-    echo "var campaign_recording = 'NEVER';\n";
-    echo "var dial_method = 'MANUAL';\n";
-    echo "var ivr_park_call = 'DISABLED';\n";
-    echo "var call_requeue_button = 0;\n";
-    echo "var agent_choose_ingroups = '0';\n";
-    echo "var agent_choose_ingroups_DV = '';\n";
-    echo "var agent_choose_ingroups_skip_count = 0;\n";
-    echo "var user_closer_campaigns = '';\n";
-    echo "var auto_dial_level = 0;\n";
-    echo "var quick_transfer_button_enabled = 0;\n";
-    echo "var custom_fields_launch = '';\n";
-    echo "var custom_fields_list_id = '';\n";
-    echo "var camp_scheduled_callbacks = 'N';\n";
-    echo "var pause_after_each_call = 0;\n";
-    echo "var dispo_check_all_pause = 0;\n";
-    echo "var phone_login = '';\n";
-    echo "var uName = '';\n";
-    echo "var uPass = '';\n";
-    echo "var logout_stop_timeouts = 0;\n";
-    // Counts / timers / UI flags (normally from goAPI login payload)
-    echo "var INgroupCOUNT = 0;\n";
-    echo "var XFgroupCOUNT = 0;\n";
-    echo "var EMAILgroupCOUNT = 0;\n";
-    echo "var PHONEgroupCOUNT = 0;\n";
-    echo "var check_r = 0;\n";
-    echo "var check_s = '';\n";
-    echo "var even = 0;\n";
-    echo "var epoch_sec = 0;\n";
-    echo "var WaitingForNextStep = 0;\n";
-    echo "var CloserSelecting = 0;\n";
-    echo "var TerritorySelecting = 0;\n";
-    echo "var agent_status_view = 0;\n";
-    echo "var agent_status_view_active = 0;\n";
-    echo "var agent_status_view_time = 0;\n";
-    echo "var active_group_dial = '';\n";
-    echo "var disable_alter_custphone = '';\n";
-    echo "var agentonly_callbacks = '0';\n";
-    echo "var CB_count_check = 0;\n";
-    echo "var nochannelinsession = 0;\n";
-    echo "var no_empty_session_warnings = 0;\n";
-    echo "var email_enabled = 0;\n";
-    echo "var AllowManualQueueCalls = '1';\n";
-    echo "var AllowManualQueueCallsChoice = '0';\n";
-    echo "var starting_dial_level = 0;\n";
-    echo "var starting_alt_phone_dialing = 0;\n";
-    echo "var view_calls_in_queue = 0;\n";
-    echo "var view_calls_in_queue_active = 0;\n";
-    echo "var closer_default_blended = 0;\n";
-    echo "var user_level = 1;\n";
-    echo "var hide_dispo_list = '0';\n";
-    echo "var disable_dispo_screen = '0';\n";
-    echo "var disable_dispo_status = '';\n";
-    echo "var manual_dial_preview = '1';\n";
-    echo "var MDDiaLOverridEform = '';\n";
-    echo "var XD_live_customer_call = 0;\n";
-    echo "var conf_exten = '';\n";
-    echo "var protocol = 'SIP';\n";
-    echo "var extension = '';\n";
-    echo "var campaign = '';\n";
-    echo "var group = '';\n";
-    echo "var dial_prefix = '';\n";
-    echo "var manual_dial_prefix = '';\n";
-    echo "var VARxferGroups = [];\n";
-    echo "var VARxferGroupsNames = [];\n";
-    echo "var VARingroups = [];\n";
-    echo "var VARingroup_handlers = [];\n";
 ?>
 
 // Settings
@@ -238,7 +95,7 @@ var isMobile = false; //initiate as false
 var is_logged_in = <?=$is_logged_in?>;
 var logging_in = false;
 var logoutWarn = true;
-var use_webrtc = <?=($use_webrtc ? $use_webrtc : 0)?>;
+var use_webrtc = <?=(int) ($use_webrtc ?? 0)?>;
 var NOW_TIME = '<?=$NOW_TIME?>';
 var SQLdate = '<?=$NOW_TIME?>';
 var filedate = '<?=$FILE_TIME?>';
@@ -249,8 +106,8 @@ var UnixTimeMS = 0;
 var t = new Date();
 var c = new Date();
 var refresh_interval = 1000;
-var SIPserver = <?=go_js_str(!empty($SIPserver) ? $SIPserver : 'kamailio')?>;
-// check_s declared in safe defaults above
+var SIPserver = '<?=(!empty($SIPserver) ? $SIPserver : 'kamailio')?>';
+var check_s;
 var getFields = false;
 var hangup_all_non_reserved= 1;	//set to 1 to force hangup all non-reserved channels upon Hangup Customer
 var blind_transfer = 0;
@@ -290,9 +147,6 @@ var enable_eccs_shortcuts = 1;
 
 <?php
 foreach ($default_settings as $idx => $val) {
-if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $idx)) {
-	continue;
-}
 if (is_numeric($val) && !preg_match("/^(conf_exten|session_id)$/", $idx)) {
     if ($idx == 'xfer_group_count') {
 	echo "var XFgroupCOUNT = {$val};\n";
@@ -324,16 +178,18 @@ if (is_numeric($val) && !preg_match("/^(conf_exten|session_id)$/", $idx)) {
 	}
 	echo "var {$valName} = new Array();\n";
     } else {
-	echo "var {$idx} = new Array('','','','','','');\n";
+	echo "    {$idx} = new Array('','','','','','');\n";
     }
 } else if (is_object($val)) {
-    $valList  = array();
-    $valList2 = array();
+    $valList  = "";
+    $valList2 = "";
     $valName  = $idx;
     foreach ($val as $idz => $valz) {
-	$valList[] = go_js_str((string) $idz);
-	$valList2[] = go_js_str((string) $valz);
+	$valList  .= json_encode((string) $idz, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ",";
+	$valList2 .= json_encode((string) $valz, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ",";
     }
+    $valList  = preg_replace("/,$/", "", $valList);
+    $valList2 = preg_replace("/,$/", "", $valList2);
     
     if ($idx == 'xfer_groups') {
 	$valName = 'VARxferGroups';
@@ -349,19 +205,19 @@ if (is_numeric($val) && !preg_match("/^(conf_exten|session_id)$/", $idx)) {
 	$valName = 'VARphonegroups';
     }
     
-    echo "var {$valName} = new Array(" . implode(',', $valList) . ");\n";
+    echo "var {$valName} = new Array({$valList});\n";
     if ($idx == 'statuses') {
-	echo "var statuses_names = new Array(" . implode(',', $valList2) . ");\n";
+	echo "var statuses_names = new Array({$valList2});\n";
     } else if ($idx == 'pause_codes') {
-	echo "var pause_codes_names = new Array(" . implode(',', $valList2) . ");\n";
+	echo "var pause_codes_names = new Array({$valList2});\n";
     }
 } else if (preg_match("/^(timezone)$/", $idx)) {
     ${$idx} = $val;
-    go_js_var($idx, $val);
+    echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 } else {
-    go_js_var($idx, $val);
+    echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     if ($idx == 'callback_statuses_list') {
-	go_js_var('VARCBstatusesLIST', $val);
+	echo "var VARCBstatusesLIST = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     }
 }
 }
@@ -369,185 +225,131 @@ echo "\n";
 
 echo "// User Settings\n";    
 foreach ($agent as $idx => $val) {
-if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $idx)) {
-	continue;
-}
+if ($idx === 'pass_hash') continue;
 if (preg_match("/^(vicidial_recording|vicidial_recording_override)$/", $idx)) {
     ${$idx} = $val;
-    go_js_var($idx, $val);
+    echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 } else {
     if ($idx == 'user') {
-	go_js_var($idx, $val);
-	go_js_var('uName', $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var uName = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if ($idx == 'pass') {
-	go_js_var($idx, $val);
-	go_js_var('uPass', $val);
+	echo "var pass = '';\nvar uPass = '';\n"; // API identity is server-side; omit account passwords from scripts.
     } else if ($idx == 'phone_login') {
 	${$idx} = $val;
-	go_js_var($idx, $val);
-	go_js_var('pExten', $val);
-	go_js_var('original_phone_login', $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var pExten = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var original_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if ($idx == 'phone_pass') {
 	${$idx} = $val;
-	go_js_var($idx, $val);
-	go_js_var('pPass', $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var pPass = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if ($idx == 'full_name') {
-	go_js_var($idx, $val);
-	go_js_var('fName', $val);
-	go_js_var('LOGfullname', $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var fName = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+	echo "var LOGfullname = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if (preg_match("/^(custom_)/", $idx)) {
-	go_js_var('user_' . $idx, $val);
+	echo "var user_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else {
-	go_js_var($idx, $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     }
 }
 }
 //echo "// ".$result['user_group']."\n";
 
-$phone_login = isset($_SESSION['phone_login']) ? $_SESSION['phone_login'] : ($phone_login ?? '');
-$phone_pass = isset($_SESSION['phone_pass']) ? $_SESSION['phone_pass'] : ($phone_pass ?? '');
-echo "\n// Phone Settings (session fallback when goAPI login info is unavailable)\n";
-if (strlen((string) $phone_login) > 0) {
-	go_js_var('phone_login', $phone_login);
-	go_js_var('original_phone_login', $phone_login);
-	go_js_var('pExten', $phone_login);
-}
-if (strlen((string) $phone_pass) > 0) {
-	go_js_var('phone_pass', $phone_pass);
-	go_js_var('pPass', $phone_pass);
-}
-if (!empty($_SESSION['user'])) {
-	go_js_var('uName', $_SESSION['user']);
-	go_js_var('user', $_SESSION['user']);
-}
-if (!empty($_SESSION['phone_this'])) {
-	go_js_var('uPass', $_SESSION['phone_this']);
-}
+$phone_login = (isset($_SESSION['phone_login'])) ? $_SESSION['phone_login'] : $phone_login;
+$phone_pass = (isset($_SESSION['phone_pass'])) ? $_SESSION['phone_pass'] : $phone_pass;
+echo "\n// Phone Settings\n";
 
 foreach ($phone as $idx => $val) {
-	if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $idx)) {
-		go_js_var($idx, $val);
-	}
+echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 }
 
 echo "\n// System Settings\n";
 
 foreach ($system as $idx => $val) {
-if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $idx) && !preg_match('/^vdc_/', (string) $idx)) {
-	continue;
-}
 if (preg_match("/^(vdc_)/", $idx)) {
     $idx_ = str_replace('vdc_', '', $idx);
-    go_js_var($idx_, $val);
+    echo "var {$idx_} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 } else {
     if ($idx == 'allow_emails') {
-	go_js_var('email_enabled', $val);
+	echo "var email_enabled = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if ($idx == 'qc_features_active') {
-	go_js_var('qc_enabled', $val);
+	echo "var qc_enabled = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else if ($idx == 'default_local_gmt') {
-	go_js_var($idx, $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 	${$idx} = $val;
     } else {
-	go_js_var($idx, $val);
+	echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     }
 }
 }
 
-// Safe defaults already declared above; keep no-op reassignments only if still missing
-echo "\n// Ensure local defaults still present\n";
-echo "if (typeof dial_method === 'undefined') { dial_method = 'MANUAL'; }\n";
-echo "if (typeof AutoDialReady === 'undefined') { AutoDialReady = 0; }\n";
-echo "if (typeof DefaultALTDial === 'undefined') { DefaultALTDial = 0; }\n";
-echo "if (typeof live_customer_call === 'undefined') { live_customer_call = 0; }\n";
-echo "if (typeof agent_choose_ingroups === 'undefined') { agent_choose_ingroups = '0'; }\n";
-echo "if (typeof user_closer_campaigns === 'undefined') { user_closer_campaigns = ''; }\n";
-echo "if (typeof ivr_park_call === 'undefined') { ivr_park_call = 'DISABLED'; }\n";
-echo "if (typeof call_requeue_button === 'undefined') { call_requeue_button = 0; }\n";
-echo "if (typeof auto_dial_level === 'undefined') { auto_dial_level = 0; }\n";
-echo "if (typeof manual_dial_min_digits === 'undefined') { manual_dial_min_digits = 6; }\n";
-echo "if (typeof agentcall_manual === 'undefined') { agentcall_manual = 1; }\n";
-echo "if (typeof phone_login === 'undefined') { phone_login = ''; }\n";
-echo "if (typeof uName === 'undefined') { uName = ''; }\n";
-echo "if (typeof uPass === 'undefined') { uPass = ''; }\n";
-
-
 //$tz = ini_get('date.timezone');
-$timezone = $timezone ?? '';
-$default_local_gmt = isset($default_local_gmt) ? (float) $default_local_gmt : 0;
 $tz = $timezone;
 if (strlen($tz) < 1) {
-	$tz = @timezone_name_from_abbr(null, (int) ($default_local_gmt * 3600), -1);
-	if ($tz === false) {
-		$tz = @timezone_name_from_abbr(null, (int) ($default_local_gmt * 3600), 1);
-	}
-}
-if (!is_string($tz) || strlen($tz) < 1) {
-	$tz = date_default_timezone_get();
-}
-if (!is_string($tz) || strlen($tz) < 1) {
-	$tz = 'UTC';
+$tz = timezone_name_from_abbr(null, $default_local_gmt * 3600, -1);
+if($tz === false) $tz = timezone_name_from_abbr(null, $default_local_gmt * 3600, 1);
 }
 date_default_timezone_set($tz);
-$is_logged_in = isset($is_logged_in) ? (int) (bool) $is_logged_in : 0;
-$use_webrtc = isset($use_webrtc) ? (int) $use_webrtc : 0;
 ?>
 
-var currentTZ = <?=go_js_str($tz)?>;
-var currenttime = <?=go_js_str(date("F d, Y H:i:s", time()))?>; //PHP method of getting server date
-var todayarray=new Array(<?=go_js_str($lh->translationFor('sunday'))?>,<?=go_js_str($lh->translationFor('monday'))?>,<?=go_js_str($lh->translationFor('tuesday'))?>,<?=go_js_str($lh->translationFor('wednesday'))?>,<?=go_js_str($lh->translationFor('thursday'))?>,<?=go_js_str($lh->translationFor('friday'))?>,<?=go_js_str($lh->translationFor('saturday'))?>);
-var montharray=new Array(<?=go_js_str($lh->translationFor('january'))?>,<?=go_js_str($lh->translationFor('february'))?>,<?=go_js_str($lh->translationFor('march'))?>,<?=go_js_str($lh->translationFor('april'))?>,<?=go_js_str($lh->translationFor('may'))?>,<?=go_js_str($lh->translationFor('june'))?>,<?=go_js_str($lh->translationFor('july'))?>,<?=go_js_str($lh->translationFor('august'))?>,<?=go_js_str($lh->translationFor('september'))?>,<?=go_js_str($lh->translationFor('october'))?>,<?=go_js_str($lh->translationFor('november'))?>,<?=go_js_str($lh->translationFor('december'))?>);
+var currentTZ = '<?=$tz?>';
+var currenttime = '<?=date("F d, Y H:i:s", time())?>' //PHP method of getting server date
+var todayarray=new Array("<?=$lh->translationFor('sunday')?>","<?=$lh->translationFor('monday')?>","<?=$lh->translationFor('tuesday')?>","<?=$lh->translationFor('wednesday')?>","<?=$lh->translationFor('thursday')?>","<?=$lh->translationFor('friday')?>","<?=$lh->translationFor('saturday')?>");
+var montharray=new Array("<?=$lh->translationFor('january')?>","<?=$lh->translationFor('february')?>","<?=$lh->translationFor('march')?>","<?=$lh->translationFor('april')?>","<?=$lh->translationFor('may')?>","<?=$lh->translationFor('june')?>","<?=$lh->translationFor('july')?>","<?=$lh->translationFor('august')?>","<?=$lh->translationFor('september')?>","<?=$lh->translationFor('october')?>","<?=$lh->translationFor('november')?>","<?=$lh->translationFor('december')?>");
 var serverdate=new Date(currenttime);
 
 <?php  
 if (isset($camp_info->campaign_id)) {
 echo "\n// Campaign Settings\n";
 $dial_prefix = '';
-go_js_var('campaign', $camp_info->campaign_id);
-go_js_var('group', $camp_info->campaign_id);
+?>
+var campaign = '<?=$camp_info->campaign_id?>';      // put here the selected campaign upon login
+var group = '<?=$camp_info->campaign_id?>';         // same value as campaign variable
+<?php
 foreach ($camp_info as $idx => $val) {
-    if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $idx)) {
-	continue;
-    }
     if (preg_match("/^(timer_action)/", $idx)) {
-	go_js_var('campaign_' . $idx, $val);
+	echo "var campaign_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
     } else {
 	if ($idx == 'dial_prefix')
 	    {$dial_prefix = $val;}
 	if ($idx == 'manual_dial_prefix')
-	    {$val = (strlen((string)$val) < 1) ? $dial_prefix : $val;}
+	    {$val = (strlen($val) < 1) ? $dial_prefix : $val;}
 	if ($idx == 'pause_after_each_call') {
 	    $idx = 'dispo_check_all_pause';
 	    $val = ($val == 'Y') ? 1 : 0;
 	}
 	if (preg_match("/^(campaign_rec_filename|default_group_alias|default_xfer_group)$/", $idx)) {
-	    go_js_var('LIVE_' . $idx, $val);
+	    echo "var LIVE_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 	}
 
 	if (!preg_match("/^(disable_dispo_screen|disable_dispo_status|campaign_recording)$/", $idx)) {
 	    if (preg_match("/^(web_form_address)/", $idx)) {
-		go_js_var($idx, $val);
-		go_js_var('VDIC_' . $idx, $val);
-		go_js_var('TEMP_VDIC_' . $idx, $val);
+		echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+		echo "var VDIC_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
+		echo "var TEMP_VDIC_{$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 	    } else {
 		if (is_object($val)) {
 		    if (preg_match("/^hotkeys/", $idx)) {
-			$hkObj = array();
+			$hkList = "";
 			foreach ($val as $k => $v) {
-			    $hkObj[(string)$k] = (string)$v;
+			    $hkList .= "'{$k}': '{$v}', ";
 			}
-			echo "var {$idx} = " . go_js_str($hkObj) . ";\n";
+			$hkList  = preg_replace("/, $/", "", $hkList);
+			echo "var {$idx} = {".$hkList."};\n";
 		    }
 		} else if (is_numeric($val) && $idx == 'call_requeue_button') {
-		    echo "var {$idx} = " . (0 + $val) . ";\n";
+		    echo "var {$idx} = $val;\n";
 		} else if (is_numeric($val) && preg_match("/^(enable_callback_alert|cb_noexpire|cb_sendemail)$/", $idx)) {
-		    echo "var {$idx} = " . (0 + $val) . ";\n";
+		    echo "var {$idx} = $val;\n";
 		} else {
-		    go_js_var($idx, $val);
+		    echo "var {$idx} = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
             if ($idx == 'am_message_exten') {
                 echo "var campaign_am_message_exten = '8320';\n";
             }
 		    if ($idx == 'auto_dial_level') {
-			go_js_var('starting_dial_level', $val);
+			echo "var starting_dial_level = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 		    }
 		    if ($idx == 'api_manual_dial') {
 			$AllowManualQueueCalls = 1;
@@ -556,14 +358,14 @@ foreach ($camp_info as $idx => $val) {
 			    $AllowManualQueueCalls = 0;
 			    $AllowManualQueueCallsChoice = 1;
 			}
-			go_js_var('AllowManualQueueCalls', $AllowManualQueueCalls);
-			go_js_var('AllowManualQueueCallsChoice', $AllowManualQueueCallsChoice);
+			echo "var AllowManualQueueCalls = '{$AllowManualQueueCalls}';\n";
+			echo "var AllowManualQueueCallsChoice = '{$AllowManualQueueCallsChoice}';\n";
 		    }
 		    if ($idx == 'manual_preview_dial') {
 			$manual_dial_preview = 1;
 			if ($val == 'DISABLED')
 			    {$manual_dial_preview = 0;}
-			go_js_var('manual_dial_preview', $manual_dial_preview);
+			echo "var manual_dial_preview = '{$manual_dial_preview}';\n";
 		    }
 		    if ($idx == 'manual_dial_override') {
 			if ($val == 'ALLOW_ALL')
@@ -572,14 +374,13 @@ foreach ($camp_info as $idx => $val) {
 			    {echo "    agentcall_manual = '0';\n";}
 		    }
 		    if ($idx == 'agent_clipboard_copy') {
-			go_js_var('Copy_to_Clipboard', $val);
+			echo "var Copy_to_Clipboard = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 		    }
 		    if (preg_match("/^(xferconf_)/", $idx)) {
-			$xferName = preg_replace(array('/xferconf/', '/number/', '/dtmf/'), array('Call_XC', 'Number', 'DTMF'), $idx);
-			go_js_var($xferName, $val);
+			echo "var ".preg_replace(array('/xferconf/', '/number/', '/dtmf/'), array('Call_XC', 'Number', 'DTMF'), $idx)." = '{$val}';\n";
 		    }
 		    if ($idx == 'view_calls_in_queue_launch') {
-			go_js_var('view_calls_in_queue_active', $val);
+			echo "var view_calls_in_queue_active = " . json_encode((string) $val, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) . ";\n";
 		    }
 		}
 	    }
@@ -588,12 +389,6 @@ foreach ($camp_info as $idx => $val) {
 	}
     }
 }
-
-$disable_dispo_screen = $disable_dispo_screen ?? '';
-$disable_dispo_status = $disable_dispo_status ?? '';
-$vicidial_recording_override = $vicidial_recording_override ?? 'DISABLED';
-$vicidial_recording = $vicidial_recording ?? '0';
-$campaign_recording = $campaign_recording ?? 'NEVER';
 
 if (($disable_dispo_screen == 'DISPO_ENABLED') || ($disable_dispo_screen == 'DISPO_SELECT_DISABLED') || (strlen($disable_dispo_status) < 1)) {
     if ($disable_dispo_screen == 'DISPO_SELECT_DISABLED') {
@@ -607,15 +402,15 @@ if (($disable_dispo_screen == 'DISPO_ENABLED') || ($disable_dispo_screen == 'DIS
 if (($disable_dispo_screen == 'DISPO_DISABLED') && (strlen($disable_dispo_status) > 0)) {
     echo "var hide_dispo_list = '0';\n";
     echo "var disable_dispo_screen = '1';\n";
-    go_js_var('disable_dispo_status', $disable_dispo_status);
+    echo "var disable_dispo_status = '{$disable_dispo_status}';\n";
 }
 
-if ((!preg_match('/DISABLED/', (string) $vicidial_recording_override)) && ((int) $vicidial_recording > 0))
+if ((!preg_match('/DISABLED/', $vicidial_recording_override)) && ($vicidial_recording > 0))
     {$campaign_recording = $vicidial_recording_override;}
-if ((string) $vicidial_recording === '0')
+if ($vicidial_recording == '0')
     {$campaign_recording = 'NEVER';}
-go_js_var('campaign_recording', $campaign_recording);
-go_js_var('LIVE_campaign_recording', $campaign_recording);
+echo "var campaign_recording = '{$campaign_recording}';\n";
+echo "var LIVE_campaign_recording = '{$campaign_recording}';\n";
 }
 
 $country_code_list = '{}';
@@ -1003,7 +798,7 @@ var refreshId = setInterval(function() {
     } else {
         updateButtons();
         
-        if (typeof DefaultALTDial !== 'undefined' && DefaultALTDial == 1) {
+        if (DefaultALTDial == 1) {
             $("#DialALTPhone").prop('checked', true);
         }
         
@@ -1218,7 +1013,8 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
 
     var logoutRegX = new RegExp("logout\.php", "ig");
     $("#cream-agent-logout").click(function(event) {
-        var hRef = $(this).attr('href') || './logout.php';
+        var hRef = $(this).attr('href');
+        var loggedOut = 0;
         if (hRef.match(logoutRegX) && !minimizedDispo) {
             event.preventDefault();
             refresh_interval = 730000;
@@ -1227,74 +1023,78 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                 showCancelButton: true,
                 confirmButtonColor: "#DD6B55",
                 confirmButtonText: "<?=$lh->translationFor('log_me_out')?>",
-                closeOnConfirm: true
+                closeOnConfirm: false
             }, function(sureToLogout){
-                if (sureToLogout === false) {
+                if (sureToLogout) {
+                    swal.close();
+		    //Whatsapp
+		    /*var userid = $('#wa-userid').val();
+		    $.ajax({
+                        url:"php/WhatsappLogout.php",
+                        method:"POST",
+                        data:{userid:userid, action:'0'},
+                        success:function(data){
+                            console.log("Whatsapp Logged Out...");
+                        }
+                    });*/
+		    // ./Whatsapp
+
+		<?php if(ROCKETCHAT_ENABLE === 'y'){?>
+            // Rocket Chat
+                var rcWin = document.getElementById('rc_frame').contentWindow;
+                var rcUserID = $("#rc-user-id").val();
+                var rcAuthToken = $("#rc-auth-token").val();
+                $.ajax({
+                    url: "./php/LogoutRocketChat.php",
+                    type: 'POST',
+                    dataType: "json",
+                    data: {userID: rcUserID, authToken: rcAuthToken},
+                    success: function(data) {
+                    console.log(data);
+		    $("#rc_row").fadeOut();
+                      	rcWin.postMessage({
+                            event: 'log-me-out-iframe'
+                        }, '<?php echo ROCKETCHAT_URL;?>');
+			delayLogoutforRocketchat();
+                    }
+                });
+            // Rocket Chat
+        	<?php } ?>
+
+		function delayLogoutforRocketchat(){
+			setTimeout(function() {
+				console.log("Logging out of Rocketchat...");
+                        }, 3000);
+		}
+
+                    if (is_logged_in && ((use_webrtc && phoneRegistered) || !use_webrtc)) {
+                        logoutWarn = false;
+                        btnLogMeOut();
+                        loggedOut++;
+                    }
+                    if (use_webrtc && phoneRegistered) {
+                        if (phone.isConnected()) {
+                            phone.stop();
+                            loggedOut++;
+                        }
+                    }
+                    if (loggedOut > 0 || (loggedOut < 1 && !is_logged_in)) {
+                        console.log('<?=$lh->translationFor('logging_out_phones')?>...');
+                        $("div.preloader center").append('<br><br><span style="font-size: 24px; color: white;"><?=$lh->translationFor('logging_out_phones')?>...</span>');
+                        $("div.preloader").fadeIn("slow");
+                        setTimeout(
+                            function() {
+                                window.location.href = hRef;
+                            },
+                            2500
+                        );
+                    }
+                } else {
                     refresh_interval = 1000;
-                    return;
                 }
-                finishAgentLogout(hRef);
             });
         }
     });
-
-    window.finishAgentLogout = function(redirectHref) {
-        var hRef = redirectHref || './logout.php';
-        logoutWarn = false;
-        $("div.preloader center").find('span[data-logout-msg]').remove();
-        $("div.preloader center").append('<br><br><span data-logout-msg="1" style="font-size: 24px; color: white;"><?=$lh->translationFor('logging_out_phones')?>...</span>');
-        $("div.preloader").fadeIn("slow");
-
-        // Clear local dialer session flag first
-        $.post("<?=$goagent_js_url?>", {
-            module_name: 'GOagent',
-            action: 'LocalLogoutUser',
-            is_logged_in: 0
-        });
-
-        try {
-            if (typeof use_webrtc !== 'undefined' && use_webrtc && typeof phone !== 'undefined' && phone && typeof phone.isConnected === 'function' && phone.isConnected()) {
-                try { phone.stop(); } catch (e) {}
-            }
-        } catch (e) {}
-        phoneRegistered = false;
-        is_logged_in = 0;
-        logout_stop_timeouts = 1;
-
-        // Best-effort goAPI logout; always redirect locally
-        var redirected = false;
-        var doRedirect = function() {
-            if (redirected) return;
-            redirected = true;
-            window.location.href = hRef;
-        };
-
-        $.ajax({
-            type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
-            cache: false,
-            data: {
-                goAction: 'goLogoutUser',
-                goUser: (typeof uName !== 'undefined' ? uName : ''),
-                goPass: (typeof uPass !== 'undefined' ? uPass : ''),
-                goSIPserver: (typeof SIPserver !== 'undefined' ? SIPserver : ''),
-                goNoDeleteSession: (typeof no_delete_sessions !== 'undefined' ? no_delete_sessions : ''),
-                goLogoutKickAll: (typeof LogoutKickAll !== 'undefined' ? LogoutKickAll : ''),
-                goServerIP: (typeof server_ip !== 'undefined' ? server_ip : ''),
-                goSessionName: (typeof session_name !== 'undefined' ? session_name : ''),
-                goExtContext: (typeof ext_context !== 'undefined' ? ext_context : ''),
-                goAgentLogID: (typeof agent_log_id !== 'undefined' ? agent_log_id : ''),
-                responsetype: 'json',
-                goUseWebRTC: (typeof use_webrtc !== 'undefined' ? use_webrtc : 0)
-            },
-            dataType: 'json',
-            timeout: 5000
-        }).always(function() {
-            setTimeout(doRedirect, 400);
-        });
-        // Hard fallback if goAPI hangs beyond timeout handling
-        setTimeout(doRedirect, 6000);
-    };
    
    /*$(document).bind('keydown', '16', function(){
 	 $("#cream-agent-logout").click();
@@ -1463,8 +1263,7 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
         'height': newHeight
     });
 
-    $("button[id^='btn']").click(function(e) {
-        e.preventDefault();
+    $("button[id^='btn']").click(function() {
         var btnID = $(this).attr('id').replace('btn', '');
         switch (btnID) {
             case "DialHangup":
@@ -1484,6 +1283,7 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                 break;
         }
     });
+	
 	// Fix for the double click on hangup button
 	$("#btnDialHangup").click(function() {
 		var thisBtn = $(this);
@@ -1627,13 +1427,7 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
     });
 
     updateButtons();
-    try {
-        toggleButtons(
-            (typeof dial_method !== 'undefined' ? dial_method : 'MANUAL'),
-            (typeof ivr_park_call !== 'undefined' ? ivr_park_call : 'DISABLED'),
-            (typeof call_requeue_button !== 'undefined' ? call_requeue_button : 0)
-        );
-    } catch (eToggle) { /* ignore missing campaign settings on local */ }
+    toggleButtons(dial_method, ivr_park_call, call_requeue_button);
     toggleStatus('NOLIVE');
     activateLinks();
     
@@ -1653,70 +1447,54 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
         }
     });
 
-    try {
-        if ($.fn.sortable) {
-            $("#notSelectedINB, #selectedINB").sortable({
-                connectWith: ".connectedINB",
-                placeholder: "ui-state-highlight",
-                receive: function(event, ui) {
-                    if ($(this).attr('id') == 'notSelectedINB' && $(this).text() != "") {
-                        $("#scButton").html('<?=$lh->translationFor('select_all')?>');
-                    }
-                },
-                remove: function(event, ui) {
-                    if ($(this).attr('id') == 'notSelectedINB' && $(this).text() == "") {
-                        $("#scButton").html('<?=$lh->translationFor('remove_all')?>');
-                    } else if ($(this).attr('id') == 'selectedINB' && $(this).text() == "") {
-                        $("#scButton").html('<?=$lh->translationFor('select_all')?>');
-                    }
-                }
-            }).disableSelection();
+    $("#notSelectedINB, #selectedINB").sortable({
+        connectWith: ".connectedINB",
+        placeholder: "ui-state-highlight",
+        receive: function(event, ui) {
+            if ($(this).attr('id') == 'notSelectedINB' && $(this).text() != "") {
+                $("#scButton").html('<?=$lh->translationFor('select_all')?>');
+            }
+        },
+        remove: function(event, ui) {
+            if ($(this).attr('id') == 'notSelectedINB' && $(this).text() == "") {
+                $("#scButton").html('<?=$lh->translationFor('remove_all')?>');
+            } else if ($(this).attr('id') == 'selectedINB' && $(this).text() == "") {
+                $("#scButton").html('<?=$lh->translationFor('select_all')?>');
+            }
         }
-    } catch (eSort) { /* jQuery UI optional for local campaign login */ }
-
-    function enableCampaignSubmit() {
-        $("#scSubmit")
-            .removeClass('disabled')
-            .prop('disabled', false)
-            .css({'pointer-events': 'auto', 'opacity': '1', 'cursor': 'pointer'});
-    }
-    function disableCampaignSubmit() {
-        $("#scSubmit")
-            .addClass('disabled')
-            .prop('disabled', true)
-            .css({'pointer-events': 'none', 'opacity': '0.65', 'cursor': 'not-allowed'});
-    }
-
-    $(document).off('change.campSelect', '#select_camp').on('change.campSelect', '#select_camp', function() {
+    }).disableSelection();
+    
+    $("#select_camp").change(function() {
         var camp = $(this).val();
         $("#inboundSelection, #scButton, #selectionNote").addClass('hidden');
         $("#closerSelectBlended").closest('p').addClass('hidden');
-        $("#logSpinner").addClass('hidden');
-        if (camp && String(camp).length > 0) {
-            enableCampaignSubmit();
-            if (typeof agent_choose_ingroups !== 'undefined' && String(agent_choose_ingroups) === '1') {
+        if (camp.length > 0) {
+            $("#scSubmit").removeClass('disabled');
+            if (agent_choose_ingroups == '1') {
                 $("#logSpinner").removeClass('hidden');
                 $("#scButton").html('<?=$lh->translationFor('select_all')?>');
                 var postData = {
                     goAction: 'goGetInboundGroups',
                     goUser: uName,
                     goPass: uPass,
-                    goCampaign: camp,
+                    goCampaign: $(this).val(),
                     responsetype: 'json'
                 };
             
                 $.ajax({
                     type: 'POST',
-                    url: '<?=$goAPI?>/goAgent/goAPI.php',
+                    url: '/php/AgentAPI.php',
                     processData: true,
                     data: postData,
                     dataType: "json",
-                    timeout: 8000
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
                 })
                 .done(function (data) {
-                    var result = data && data.result;
+                    var result = data.result;
                     $("#logSpinner").addClass('hidden');
-                    if (result && result != 'error') {
+                    if (result != 'error') {
                         var inb_list = '';
                         $.each(data.data.inbound_groups, function(idx, inbg) {
                             inb_list += "<li class='ui-state-default'><abbr title='"+inbg+"'>"+idx+"</abbr></li>";
@@ -1726,38 +1504,36 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                         $("#inboundSelection, #scButton, #selectionNote").removeClass('hidden');
                         $("#closerSelectBlended").closest('p').removeClass('hidden');
                     } else {
+                        //alert(data.message);
                         $("#inboundSelection, #scButton, #selectionNote").addClass('hidden');
                         $("#closerSelectBlended").closest('p').addClass('hidden');
                     }
-                    enableCampaignSubmit();
-                })
-                .fail(function () {
-                    $("#logSpinner").addClass('hidden');
-                    $("#inboundSelection, #scButton, #selectionNote").addClass('hidden');
-                    enableCampaignSubmit();
                 });
             } else {
-                var closerRaw = (typeof user_closer_campaigns !== 'undefined' && user_closer_campaigns) ? String(user_closer_campaigns) : '';
-                var inb_list = $.trim(closerRaw.slice(0,-1)),
+                var inb_list = $.trim(user_closer_campaigns.slice(0,-1)),
                 user_inb_list = '';
-                if (inb_list.length > 0) {
-                    $.each(inb_list.split(" "), function(idx, inbg) {
-                        user_inb_list += "<li class='ui-state-default'><abbr title='"+inbg+"'>"+inbg+"</abbr></li>";
-                    });
-                    $("#selectedINB").empty().append(user_inb_list);
-                }
+                $.each(inb_list.split(" "), function(idx, inbg) {
+                    user_inb_list += "<li class='ui-state-default'><abbr title='"+inbg+"'>"+inbg+"</abbr></li>";
+                });
+                $("#selectedINB").empty().append(user_inb_list);
             }
         } else {
-            disableCampaignSubmit();
+            $("#scSubmit").addClass('disabled');
         }
     });
     
     $("#transfer-selection").change(function() {
         var transfer_selected = $(this).val();
         $("#transfer-closer, #transfer-regular").addClass('hidden');
-        if (transfer_selected && transfer_selected.length > 0) {
+        //$("#closerSelectBlended").closest('p').addClass('hidden');
+        if (transfer_selected.length > 0) {
             var thisSelected = transfer_selected.toLowerCase();
+            //$("#scSubmit").removeClass('disabled');
+
             $("#transfer-"+thisSelected).removeClass('hidden');
+            //$("#closerSelectBlended").closest('p').removeClass('hidden');
+        } else {
+            //$("#scSubmit").addClass('disabled');
         }
     });
 
@@ -1777,42 +1553,26 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
         $(this).text(content);
     });
     
-    $(document).off('click.campSubmit', '#scSubmit').on('click.campSubmit', '#scSubmit', function(e) {
+    $("#scSubmit").click(function(e) {
         e.preventDefault();
-        e.stopPropagation();
-        var campVal = $("#select_camp").val();
-        if (!campVal || String(campVal).length < 1) {
-            swal('<?=$lh->translationFor('error')?>', '<?=$lh->translationFor('select_a_campaign')?>', 'warning');
-            return;
-        }
-        // Allow click even if Bootstrap left a stale .disabled class
-        enableCampaignSubmit();
         var inbArray = '';
         var CloserSelectList = '';
         var origPreloader = $(".preloader center").html();
         $(".preloader center").append('<br><br><span style="font-size: 24px; color: white;"><?=$lh->translationFor('logging_in_phones')?>...</span>');
         $(".preloader").fadeIn('slow');
-        disableCampaignSubmit();
+        $("#scSubmit").addClass('disabled');
         $("#selectedINB").find('abbr').each(function(index) {
             inbArray += $(this).text() + "|";
             CloserSelectList += $(this).text() + " ";
         });
         $("#CloserSelectList").val(CloserSelectList.slice(0, -1));
         
-        if (use_webrtc && typeof phone !== 'undefined' && phone && typeof phone.isConnected === 'function' && !phone.isConnected()) {
-            try { phone.start(); } catch (ePhone) {}
+        if (use_webrtc && !phone.isConnected()) {
+            phone.start();
         }
         
-        var webrtcWaitStarted = Date.now();
         var loggingInUser = setInterval(function() {
-            var webrtcOk = !use_webrtc || (use_webrtc && !registrationFailed && phoneRegistered);
-            var webrtcSkip = !use_webrtc || !phone;
-            var webrtcTimedOut = use_webrtc && (Date.now() - webrtcWaitStarted > 12000);
-            if (webrtcTimedOut && !phoneRegistered) {
-                registrationFailed = true;
-                console.warn('WebRTC register timed out; continuing dialer login without softphone');
-            }
-            if (webrtcOk || webrtcSkip || webrtcTimedOut) {
+            if ((use_webrtc && !registrationFailed && phoneRegistered) || !use_webrtc) {
                 clearInterval(loggingInUser);
                 
                 var postData = {
@@ -1825,67 +1585,21 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                     goCloserBlended: ($("#closerSelectBlended").is(':checked') ? 1 : 0),
                     goUseWebRTC: use_webrtc
                 };
-
-                // Local XAMPP: try CRM stub first so dialer can enter without full Asterisk
+        
                 $.ajax({
                     type: 'POST',
-                    url: '<?=$goagent_js_url?>',
-                    data: {
-                        module_name: 'GOagent',
-                        action: 'LocalLoginUser',
-                        goCampaign: $("#select_camp").val(),
-                        goUser: uName
-                    },
-                    dataType: 'json',
-                    timeout: 8000
-                }).done(function (localRes) {
-                    if (localRes && localRes.result === 'success') {
-                        $(".preloader").fadeOut('slow');
-                        $(".preloader center").html(origPreloader);
-                        $("#select-campaign").modal('hide');
-                        is_logged_in = 1;
-                        check_if_logged_out = 1;
-                        logout_stop_timeouts = 0;
-                        just_logged_in = true;
-                        refresh_interval = 1000;
-                        campaign = $("#select_camp").val();
-                        group = campaign;
-                        agent_lead_search_override = 'ENABLED';
-                        agent_lead_search = 'ENABLED';
-                        agent_lead_search_method = 'CAMPLISTS';
-                        $("#agent-lead-search").removeClass('hidden');
-                        if (typeof MainPanelToFront === 'function') MainPanelToFront();
-                        if (typeof updateButtons === 'function') updateButtons();
-                        try { toggleButtons(dial_method, ivr_park_call, call_requeue_button); } catch (e2) {}
-                        $.post("<?=$goagent_js_url?>", {'module_name': 'GOagent', 'action': 'SessioN', 'campaign_id': campaign, 'is_logged_in': 1});
-                        // Open Contacts and load campaign leads
-                        try {
-                            window.location.hash = 'contacts';
-                            if (typeof showAgentPanel === 'function') showAgentPanel('contacts');
-                            if (typeof getContactList === 'function') getContactList('');
-                        } catch (e3) {}
-                        enableCampaignSubmit();
-                        return;
-                    }
-                    // Fall through to goAPI
-                    doGoApiLogin();
-                }).fail(function () {
-                    doGoApiLogin();
-                });
-
-                function doGoApiLogin() {
-                $.ajax({
-                    type: 'POST',
-                    url: '<?=$goAPI?>/goAgent/goAPI.php',
+                    url: '/php/AgentAPI.php',
                     processData: true,
                     data: postData,
                     dataType: "json",
-                    timeout: 15000
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    }
                 })
                 .done(function (result) {
                     $(".preloader").fadeOut('slow');
                     $(".preloader center").html(origPreloader);
-                    if (result && result.result != 'error') {
+                    if (result.result != 'error') {
                         $("#select-campaign").modal('hide');
                         MainPanelToFront();
                         
@@ -2136,7 +1850,6 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                             type: 'error'
                         });
                         $("#scSubmit").removeClass('disabled');
-                        enableCampaignSubmit();
                     }
                 })
                 .fail(function() {
@@ -2144,23 +1857,16 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
                     $(".preloader center").html(origPreloader);
                     refresh_interval = 730000;
                     is_logged_in = 0;
-                    enableCampaignSubmit();
-                    swal({
-                        title: '<?=$lh->translationFor('error')?>',
-                        text: "Could not log into the dialer campaign. Check goAPI / telephony services.",
-                        type: 'error'
-                    });
+                    $("#scSubmit").removeClass('disabled');
                 });
-                } // end doGoApiLogin
             } else {
                 $("#select-campaign").modal('hide');
                 if ((use_webrtc && registrationFailed && !phoneRegistered) || !use_webrtc) {
                     $(".preloader").fadeOut('slow');
                     $(".preloader center").html(origPreloader);
                 }
-                enableCampaignSubmit();
             }
-        }, 500);
+        }, 3000);
     });
     
     $("input.digits-only, input.phonenumbers-only").keypress(function (e) {
@@ -2292,16 +1998,7 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
     
     // Hijack links on left menu
     $("a:regex(href, index|agent|edituser|profile|customerslist|events|messages|notifications|tasks|callbackslist|composemail|readmail)").on('click', hijackThisLink);
-    $('a[href="#profile"]').on('click', hijackThisLink);
-    $(window).on('hashchange', applyAgentHashFromUrl);
-    applyAgentHashFromUrl();
-    $(window).on('load', function() {
-        applyAgentHashFromUrl();
-        if (typeof agentOpenPanelFromHash === 'function') {
-            agentOpenPanelFromHash();
-        }
-    });
-
+    
     $("#submitCBDate").click(function() {
 	<?php if( ECCS_BLIND_MODE === 'y') { ?>
 	var currDate = new Date(serverdate.getFullYear(), serverdate.getMonth(), serverdate.getDate(), serverdate.getHours(), serverdate.getMinutes());
@@ -2351,94 +2048,59 @@ $('#callback-datepicker').on('shown.bs.modal', function(){
     });
     
     $("#cust-info-submit").click(function() {
-        var submitCFData = null;
+        var submitCFData;
         var submitData = $("[id^='viewCust_']").serializeArray();
         var saveAsCustomer = $("#convert-customer").prop('checked');
-
+        
         if ($("#custom-field-content").is(':visible')) {
             submitCFData = $("[id^='viewCustom_']").serializeArray();
         }
-
-        var onSaveResult = function(data) {
-            if (data && data.result == 'success') {
-                swal({
-                    title: '<?=$lh->translationFor('success')?>',
-                    text: data.message || 'Customer info saved.',
-                    type: 'success',
-                    html: true
-                });
-                if (typeof getContactList === 'function') {
-                    getContactList();
-                }
-                $("#view-customer-info").modal('hide');
-            } else {
-                swal({
-                    title: '<?=$lh->translationFor('error')?>',
-                    text: ((data && data.message) ? data.message : 'Save failed') + ".<br><br><?=$lh->translationFor('contact_admin')?>",
-                    type: 'error',
-                    html: true
-                });
-            }
-        };
-
-        var saveViaGoApi = function() {
-            $.ajax({
-                type: 'POST',
-                url: '<?=$goAPI?>/goAgent/goAPI.php',
-                cache: false,
-                data: {
-                    goAction: 'goUpdateCustomer',
-                    goUser: (typeof uName !== 'undefined' ? uName : ''),
-                    goPass: (typeof uPass !== 'undefined' ? uPass : ''),
-                    goLeadInfo: submitData,
-                    goCustomInfo: submitCFData,
-                    goSaveAsCustomer: saveAsCustomer,
-                    responsetype: 'json'
-                },
-                dataType: 'json',
-                timeout: 20000
-            })
-            .done(onSaveResult)
-            .fail(function() {
-                swal({
-                    title: '<?=$lh->translationFor('error')?>',
-                    text: 'Could not save contact information to the server.',
-                    type: 'error'
-                });
-            });
-        };
-
+        
         swal({
             title: "<?=$lh->translationFor('saving_customer_info')?>",
             type: "warning",
             showCancelButton: true,
             confirmButtonColor: "#DD6B55",
             confirmButtonText: "<?=$lh->translationFor('submit')?>"
-        }, function(isConfirm) {
-            if (isConfirm === false) {
-                return;
-            }
-            // Local DB first (XAMPP without goAPI)
+        }, function(){
+            var postData = {
+                goAction: 'goUpdateCustomer',
+                goUser: uName,
+                goPass: uPass,
+                goLeadInfo: submitData,
+                goCustomInfo: submitCFData,
+                goSaveAsCustomer: saveAsCustomer,
+                responsetype: 'json'
+            };
+        
             $.ajax({
                 type: 'POST',
-                url: '<?=$goagent_js_url?>',
-                cache: false,
-                data: {
-                    module_name: 'GOagent',
-                    action: 'LocalUpdateCustomer',
-                    goLeadInfo: submitData,
-                    goSaveAsCustomer: saveAsCustomer ? 1 : 0
-                },
-                dataType: 'json',
-                timeout: 20000
-            }).done(function(localRes) {
-                if (localRes && localRes.result === 'success') {
-                    onSaveResult(localRes);
-                    return;
+                url: '/php/AgentAPI.php',
+                processData: true,
+                data: postData,
+                dataType: "json",
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
                 }
-                saveViaGoApi();
-            }).fail(function() {
-                saveViaGoApi();
+            })
+            .done(function (data) {
+                if (data.result == 'success') {
+                    swal({
+                        title: '<?=$lh->translationFor('success')?>',
+                        text: data.message,
+                        type: 'success',
+                        html: true
+                    });
+                    getContactList();
+                    $("#view-customer-info").modal('hide');
+                } else {
+                    swal({
+                        title: '<?=$lh->translationFor('error')?>',
+                        text: data.message+".<br><br><?=$lh->translationFor('contact_admin')?>",
+                        type: 'error',
+                        html: true
+                    });
+                }
             });
         });
     });
@@ -2568,104 +2230,92 @@ function checkSidebarIfOpen(startUp) {
     });
 }
 
-function showAgentPanel(hash, origHash) {
-    origHash = (typeof origHash === 'string') ? origHash : window.location.hash.replace("#", "");
-    hash = hash || '';
-    var breadCrumb = '<li><a href="agent.php"><i class="fa fa-home"></i> <?=$lh->translationFor('home')?></a></li>';
-    if (hash === 'contacts') {
-        $(".content-heading span").html("<?=$lh->translationFor('contacts')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('contacts')?></li>';
-    } else if (hash === 'profile') {
-        $(".content-heading span").html("<?=$lh->translationFor('my_profile')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('profile')?></li>';
-    } else if (hash === 'callbacks') {
-        $(".content-heading span").html("<?=$lh->translationFor('list_of_callbacks')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('callbacks')?></li>';
-    } else if (hash === 'messages') {
-        $(".content-heading span").html("<?=$lh->translationFor('messages')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('messages')?></li>';
-    } else if (hash === 'notifications') {
-        $(".content-heading span").html("<?=$lh->translationFor('notifications')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('notifications')?></li>';
-    } else if (hash === 'tasks') {
-        $(".content-heading span").html("<?=$lh->translationFor('tasks')?>");
-        breadCrumb += '<li class="active"><?=$lh->translationFor('tasks')?></li>';
-    }
-
-    if (origHash !== hash && hash === 'contacts') {
-        $(".preloader").fadeIn('fast');
-        getContactList();
-    }
-
-    if (hash.length > 0) {
-        window.location.hash = hash;
-        $("#loaded-contents div[id^='contents-']").each(function() {
-            var contentID = $(this).prop('id').replace('contents-', '');
-            $(this).toggle(contentID === hash);
-        });
-        $("#cust_info").hide();
-        $("#loaded-contents").show();
-        history.pushState('', document.title, window.location.pathname + '#' + hash);
-    } else {
-        MainPanelToFront();
-    }
-
-    $(".content-heading ol").empty().html(breadCrumb);
-    if (origHash !== hash && hash !== 'contacts') {
-        $(".preloader").fadeOut('slow');
-    }
-}
-
-function applyAgentHashFromUrl() {
-    var hash = window.location.hash.replace("#", "");
-    if (!hash.length) {
-        return;
-    }
-    showAgentPanel(hash, '');
-}
-
 function hijackThisLink(e) {
     e.preventDefault();
-    var thisLink = $(this).attr('href') || '';
-    var hash = '';
-    var origHash = window.location.hash.replace("#", "");
-
-    if (/customerslist/g.test(thisLink)) {
-        hash = 'contacts';
-    } else if (/agent|index/g.test(thisLink)) {
-        hash = '';
-        $(".content-heading span").html("<?=$lh->translationFor('contact_information')?>");
-    } else if (/edituser|profile/g.test(thisLink)) {
-        hash = 'profile';
-    } else if (/events|callbackslist/g.test(thisLink)) {
-        hash = 'callbacks';
-    } else if (/messages|readmail|composemail/g.test(thisLink)) {
-        hash = 'messages';
-        $.each($("div[id^='mail-']"), function(idx, elem) {
-            var thisID = $(elem).attr('id').replace('mail-', '');
-            var searchID = new RegExp(thisID);
-            $(elem).toggle(searchID.test(thisLink));
-        });
-    } else if (/notifications/g.test(thisLink)) {
-        hash = 'notifications';
-    } else if (/tasks/g.test(thisLink)) {
-        hash = 'tasks';
-    }
-
-    var allowWhileDispo = (hash === 'profile' || hash === 'messages' || hash === 'callbacks' || hash === 'contacts' || hash === 'notifications' || hash === 'tasks');
-    if (minimizedDispo && ((hash.length > 0 && !allowWhileDispo) || hash.length === 0)) {
-        return;
-    }
-
-    if (hash.length === 0) {
-        MainPanelToFront();
-        $(".content-heading ol").html('<li class="active"><i class="fa fa-home"></i> <?=$lh->translationFor('home')?></li>');
+    if (!minimizedDispo) {
+        var thisLink = $(this).attr('href');
+        var hash = '';
+        var origHash = window.location.hash.replace("#","");
+        var breadCrumb = '<li><a href="agent.php"><i class="fa fa-home"></i> <?=$lh->translationFor('home')?></a></li>';
+        if (/customerslist/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('contacts')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('contacts')?></li>';
+            hash = 'contacts';
+        } else if (/agent|index/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('contact_information')?>");
+            breadCrumb = '<li class="active"><i class="fa fa-home"></i> <?=$lh->translationFor('home')?></li>';
+        } else if (/edituser/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('my_profile')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('profile')?></li>';
+            hash = 'profile';
+        } else if (/profile/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('my_profile')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('profile')?></li>';
+            hash = 'profile';
+        } else if (/events|callbackslist/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('list_of_callbacks')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('callbacks')?></li>';
+            hash = 'callbacks';
+        } else if (/messages|readmail|composemail/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('messages')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('messages')?></li>';
+            
+            $.each($("div[id^='mail-']"), function(idx, elem) {
+                var thisID = $(elem).attr('id').replace('mail-', '');
+                var searchID = new RegExp(thisID);
+                if (searchID.test(thisLink)) {
+                    $(elem).show();
+                } else {
+                    $(elem).hide();
+                }
+            });
+            hash = 'messages';
+        } else if (/notifications/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('notifications')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('notifications')?></li>';
+            hash = 'notifications';
+        } else if (/tasks/g.test(thisLink)) {
+            $(".content-heading span").html("<?=$lh->translationFor('tasks')?>");
+            breadCrumb += '<li class="active"><?=$lh->translationFor('tasks')?></li>';
+            hash = 'tasks';
+        }
+        
+        if (origHash !== hash) {
+            $(".preloader").fadeIn('fast');
+            if (hash == 'contacts') {
+                getContactList();
+            }
+        }
+        
+        if (hash.length > 0) {
+            window.location.hash = hash;
+            
+            var thisContents = $("#loaded-contents div[id^='contents-']");
+            $.each(thisContents, function() {
+                var contentID = $(this).prop('id').replace('contents-', '');
+                if (contentID == hash) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+            
+            $("#cust_info").hide();
+            $("#loaded-contents").show();
+        } else {
+            MainPanelToFront();
+        }
+        
+        $(".content-heading ol").empty();
+        $(".content-heading ol").html(breadCrumb);
+        $("a:regex(href, index|agent|edituser|profile|customerslist|events|messages|notifications|tasks|callbackslist|composemail|readmail)").off('click', hijackThisLink).on('click', hijackThisLink);
+        
         history.pushState('', document.title, window.location.pathname);
-    } else {
-        showAgentPanel(hash, origHash);
+        
+        if (origHash !== hash && hash != 'contacts') {
+            $(".preloader").fadeOut('slow');
+        }
     }
-
-    $("a:regex(href, index|agent|edituser|profile|customerslist|events|messages|notifications|tasks|callbackslist|composemail|readmail)").off('click', hijackThisLink).on('click', hijackThisLink);
 }
 
 function btnLogMeIn () {
@@ -2689,25 +2339,24 @@ function btnLogMeIn () {
     
     if (typeof phone_login !== 'undefined' && phone_login.length > 0) {
         var postData = {
-            module_name: 'GOagent',
-            action: 'GetAllowedCampaigns',
-            goUser: (typeof uName !== 'undefined' ? uName : ''),
-            goPass: (typeof uPass !== 'undefined' ? uPass : ''),
+            goAction: 'goGetAllowedCampaigns',
+            goUser: uName,
+            goPass: uPass,
             responsetype: 'json'
         };
-
+    
         $.ajax({
             type: 'POST',
-            url: '<?=$goagent_js_url?>',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
-            timeout: 20000,
-            cache: false
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
         })
         .done(function (result) {
-            logging_in = false;
-            if (result && result.result == 'success') {
+            if (result.result == 'success') {
                 var camp_list = result.data.allowed_campaigns;
                 var camp_options = "<option value=''><?=$lh->translationFor('select_a_campaign')?></option>";
                 $.each(camp_list, function(idx, camp) {
@@ -2716,55 +2365,30 @@ function btnLogMeIn () {
                 $("#select-campaign select#select_camp").html(camp_options);
                 $("#inboundSelection, #scButton, #selectionNote").addClass('hidden');
                 $("#closerSelectBlended").closest('p').addClass('hidden');
-                // Enable Submit once a real campaign is chosen (and auto-pick if only one)
-                var $camp = $("#select_camp");
-                var realOpts = $camp.find("option").filter(function() { return $(this).val() !== ''; });
-                if (realOpts.length === 1) {
-                    $camp.val(realOpts.first().val());
-                }
-                $camp.trigger('change');
                 $("#select-campaign").modal({
                     keyboard: false,
                     backdrop: 'static',
                     show: true
                 });
-
-                $("#select-campaign").off('hidden.bs.modal').on('hidden.bs.modal', function() {
+                
+                $("#select-campaign").on('hidden.bs.modal', function() {
                     logging_in = false;
+                    //console.log('hide', logging_in);
                 });
-
-                $.post("<?=$goagent_js_url?>", {'module_name': 'GOagent', 'action': 'CheckWebRTC'}, function(result) {
-                    use_webrtc = parseInt(result, 10);
+                
+                $.post("<?=$module_dir?>GOagentJS.php", {'module_name': 'GOagent', 'action': 'CheckWebRTC'}, function(result) {
+                    use_webrtc = parseInt(result);
                 });
             } else {
-                var msg = (result && result.message) ? result.message : '<?=$lh->translationFor('contact_admin')?>';
                 swal({
                     title: '<?=$lh->translationFor('error')?>',
-                    text: msg + ".<br><?=$lh->translationFor('contact_admin')?>",
+                    text: result.message+".<br><?=$lh->translationFor('contact_admin')?>",
                     type: 'error',
                     html: true
                 });
             }
-        })
-        .fail(function (xhr) {
-            logging_in = false;
-            var detail = '';
-            try {
-                var parsed = JSON.parse(xhr.responseText || '{}');
-                if (parsed && parsed.message) detail = parsed.message;
-            } catch (e) {
-                if (xhr && xhr.responseText && xhr.responseText.length < 180) detail = xhr.responseText;
-            }
-            if (!detail && xhr && xhr.status) detail = 'HTTP ' + xhr.status;
-            swal({
-                title: '<?=$lh->translationFor('error')?>',
-                text: "<?=$lh->translationFor('contact_admin')?><br>Could not load campaign list from the CRM. Hard-refresh the page (Ctrl+F5) and try again." + (detail ? ("<br><small>" + detail + "</small>") : ''),
-                type: 'error',
-                html: true
-            });
         });
     } else {
-        logging_in = false;
         swal({
             title: '<?=$lh->translationFor('phone_not_configured')?>',
             text: "<?=$lh->translationFor('contact_admin')?>",
@@ -2785,35 +2409,19 @@ function btnLogMeOut () {
                 showCancelButton: true,
                 confirmButtonColor: "#DD6B55",
                 confirmButtonText: "<?=$lh->translationFor('log_me_out')?>",
-                closeOnConfirm: true
+                closeOnConfirm: false
             }, function(isConfirm){
-                if (isConfirm === false) {
-                    refresh_interval = 1000;
-                    return;
-                }
-                if (typeof finishAgentLogout === 'function') {
-                    finishAgentLogout('./logout.php');
-                } else {
-                    sendLogout(true);
-                }
+                swal.close();
+                sendLogout(isConfirm);
             });
         } else {
-            if (typeof finishAgentLogout === 'function') {
-                finishAgentLogout('./logout.php');
-            } else {
-                sendLogout(true);
-            }
+            sendLogout(true);
         }
     }
 }
     
 function sendLogout (logMeOut) {
     if (logMeOut) {
-        // Prefer unified local logout + redirect (XAMPP / offline goAPI)
-        if (typeof finishAgentLogout === 'function') {
-            finishAgentLogout('./logout.php');
-            return;
-        }
 	
         var postData = {
             goAction: 'goLogoutUser',
@@ -2832,14 +2440,13 @@ function sendLogout (logMeOut) {
     
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            timeout: 8000
+            }
         })
         .done(function (result) {
             if (result.result == 'success') {
@@ -2911,10 +2518,6 @@ function sendLogout (logMeOut) {
                     is_logged_in = 0;
                 }
             }
-        })
-        .fail(function() {
-            is_logged_in = 0;
-            window.location.href = './logout.php';
         });
         logoutWarn = true;
         logout_stop_timeouts = 1;
@@ -3080,19 +2683,15 @@ function enableDialOnEnter(e) {
 }
 
 function activateLinks() {
-    var ready = (typeof AutoDialReady !== 'undefined') ? AutoDialReady : 0;
-    var liveCall = (typeof live_customer_call !== 'undefined') ? live_customer_call : 0;
-    var minDigits = (typeof manual_dial_min_digits !== 'undefined') ? manual_dial_min_digits : 6;
-    var manualOk = (typeof agentcall_manual !== 'undefined') ? agentcall_manual : 1;
-    if (ready > 0 || liveCall > 0) {
+    if (AutoDialReady > 0 || live_customer_call > 0) {
         $('#MDPhonENumbeR').val('');
         $('#MDPhonENumbeR').prop('readonly', true);
     } else {
         $('#MDPhonENumbeR').prop('readonly', false);
     }
-    var phoneNumber = $('#MDPhonENumbeR').val() || '';
+    var phoneNumber = $('#MDPhonENumbeR').val();
 
-    if (phoneNumber.length >= minDigits && manualOk > 0) {
+    if (phoneNumber.length >= manual_dial_min_digits && agentcall_manual > 0) {
         $("a[id^='manual-dial-'], button[id^='manual-dial-']").removeClass('disabled');
     } else {
         $("a[id^='manual-dial-'], button[id^='manual-dial-']").addClass('disabled');
@@ -3451,7 +3050,7 @@ function checkIfStillLoggedIn(logged_out, last_call) {
     
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -3527,7 +3126,7 @@ function CheckForConfCalls (confnum, force) {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -4039,7 +3638,7 @@ function CheckForIncoming () {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -4617,7 +4216,7 @@ function CheckForIncoming () {
                 Call_Script_ID = '';
             }
             if ( (view_scripts == 1) && (Call_Script_ID.length > 0 || campaign_script.length > 0) ) {
-                var SCRIPT_web_form = "http://127.0.0.1/testing.php";
+                var SCRIPT_web_form = '';
                 var TEMP_SCRIPT_web_form = URLDecode(SCRIPT_web_form,'YES','DEFAULT','1');
                 //$("#ScriptButtonSpan").html("<A HREF=\"#\" onClick=\"ScriptPanelToFront();\"><IMG SRC=\"./images/script_tab.png\" ALT=\"SCRIPT\" WIDTH=143 HEIGHT=27 BORDER=0></A>");
 
@@ -4728,7 +4327,7 @@ function RefreshAgentsView(RAlocation, RAcount) {
         
             $.ajax({
                 type: 'POST',
-                url: '<?=$goAPI?>/goAgent/goAPI.php',
+                url: '/php/AgentAPI.php',
                 processData: true,
                 data: postData,
                 dataType: "json",
@@ -4786,7 +4385,7 @@ function ReCheckCustomerChan() {
 
     //$.ajax({
     //    type: 'POST',
-    //    url: '<?=$goAPI?>/goAgent/goAPI.php',
+    //    url: '/php/AgentAPI.php',
     //    processData: true,
     //    data: postData,
     //    dataType: "json",
@@ -4974,7 +4573,7 @@ function DialLog(taskMDstage, nodeletevdac) {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -5104,7 +4703,7 @@ function ConfSendRecording(taskconfrectype, taskconfrec, taskconffile, taskfroma
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -5168,7 +4767,7 @@ function RefreshCallsInQueue(CQcount) {
         
             $.ajax({
                 type: 'POST',
-                url: '<?=$goAPI?>/goAgent/goAPI.php',
+                url: '/php/AgentAPI.php',
                 processData: true,
                 data: postData,
                 dataType: "json",
@@ -5204,7 +4803,7 @@ function CallBacksCountCheck() {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -5424,7 +5023,7 @@ function NewCallbackCall(taskCBid, taskLEADid, taskCBalt) {
     
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -5493,7 +5092,7 @@ function UpdateFieldsData() {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -5703,7 +5302,7 @@ function Clear_API_Field(temp_field) {
         
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -5740,7 +5339,7 @@ function ManualDialCheckChannel(taskCheckOR) {
         
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -6305,7 +5904,7 @@ function DialedCallHangup(dispowindow, hotkeysused, altdispo, nodeletevdac) {
         
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -6720,7 +6319,7 @@ function DispoSelectSubmit() {
     
             $.ajax({
                 type: 'POST',
-                url: '<?=$goAPI?>/goAgent/goAPI.php',
+                url: '/php/AgentAPI.php',
                 processData: true,
                 data: postData,
                 dataType: "json",
@@ -6983,7 +6582,7 @@ function ManualDialSkip() {
         
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -7182,7 +6781,7 @@ function CustomerData_update() {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -7332,7 +6931,7 @@ function ManualDialOnly(taskaltnum) {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -7371,7 +6970,7 @@ function ManualDialOnly(taskaltnum) {
                 {all_record = 'YES';}
 
             if ( (view_scripts == 1) && (campaign_script.length > 0) ) {
-                var SCRIPT_web_form = 'http://127.0.0.1/testing.php';
+                var SCRIPT_web_form = '';
                 var TEMP_SCRIPT_web_form = URLDecode(SCRIPT_web_form,'YES','DEFAULT','1');
                 //$("#ScriptButtonSpan").html("<a href='#' id='ScriptButtonSpan' onClick='ScriptPanelToFront();' style='font-size:13px;color:white;text-decoration:none;'><?=ucwords($lh->translationFor('script'))?></a><!--<A HREF=\"#\" onClick=\"ScriptPanelToFront();\"><IMG SRC=\"./images/script_tab.png\" ALT=\"<?=$lh->translationFor('script')?>\" WIDTH=143 HEIGHT=27 BORDER=0></A>-->");
 
@@ -7550,7 +7149,7 @@ function BasicOriginateCall(tasknum, taskprefix, taskreverse, taskdialvalue, tas
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -7706,7 +7305,7 @@ function ManualDialNext(mdnCBid, mdnBDleadid, mdnDiaLCodE, mdnPhonENumbeR, mdnSt
 
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -8057,7 +7656,7 @@ function ManualDialNext(mdnCBid, mdnBDleadid, mdnDiaLCodE, mdnPhonENumbeR, mdnSt
                         }
 
                         if ( (view_scripts == 1) && (campaign_script.length > 0) ) {
-                            var SCRIPT_web_form = 'http://127.0.0.1/testing.php';
+                            var SCRIPT_web_form = '';
                             var TEMP_SCRIPT_web_form = URLDecode(SCRIPT_web_form,'YES','DEFAULT','1');
                             //$("#ScriptButtonSpan").html("<a href=\"#\" id=\"ScriptButtonSpan\" onClick=\"ScriptPanelToFront();\" style=\"font-size:13px;color:white;text-decoration:none;\"><?=ucwords($lh->translationFor('script'))?></a> <!-- <A HREF=\"#\" onClick=\"ScriptPanelToFront();\"><IMG SRC=\"./images/script_tab.png\" ALT=\"<?=$lh->translationFor('script')?>\" WIDTH=143 HEIGHT=27 BORDER=0></A>-->");
 
@@ -8106,7 +7705,7 @@ function ManualDialNext(mdnCBid, mdnBDleadid, mdnDiaLCodE, mdnPhonENumbeR, mdnSt
                             //FormContentsLoad();
                         }
                         if ( (view_scripts == 1) && (campaign_script.length > 0) ) {
-                            var SCRIPT_web_form = 'http://127.0.0.1/testing.php';
+                            var SCRIPT_web_form = '';
                             var TEMP_SCRIPT_web_form = URLDecode(SCRIPT_web_form,'YES','DEFAULT','1');
                             //RefresHScript();
                         }
@@ -8201,7 +7800,7 @@ function AutoDial_Resume_Pause(taskaction, taskagentlog, taskwrapup, taskstatusc
         
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -8319,7 +7918,7 @@ function XFerCallHangup() {
             
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -8388,7 +7987,7 @@ function DialTimeHangup(tasktypecall) {
             
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -8857,7 +8456,7 @@ function mainxfer_send_redirect(taskvar, taskxferconf, taskserverip, taskdebugno
             var XFRDop = '';
             $.ajax({
                 type: 'POST',
-                url: '<?=$goAPI?>/goAgent/goAPI.php',
+                url: '/php/AgentAPI.php',
                 processData: true,
                 data: postData,
                 dataType: "json",
@@ -8894,7 +8493,7 @@ function mainxfer_send_redirect(taskvar, taskxferconf, taskserverip, taskdebugno
                 
                 $.ajax({
                     type: 'POST',
-                    url: '<?=$goAPI?>/goAgent/goAPI.php',
+                    url: '/php/AgentAPI.php',
                     processData: true,
                     data: postData,
                     dataType: "json",
@@ -9221,7 +8820,7 @@ function checkForCallbacks() {
                 
                     $.ajax({
                         type: 'POST',
-                        url: '<?=$goAPI?>/goAgent/goAPI.php',
+                        url: '/php/AgentAPI.php',
                         processData: true,
                         data: postData,
                         dataType: "json",
@@ -9289,7 +8888,7 @@ function checkForCallbacks() {
                     
                         $.ajax({
                             type: 'POST',
-                            url: '<?=$goAPI?>/goAgent/goAPI.php',
+                            url: '/php/AgentAPI.php',
                             processData: true,
                             data: postData,
                             dataType: "json",
@@ -9386,56 +8985,45 @@ function replaceCustomFields(view) {
 
 function ViewCustInfo(leadid) {
     $(".cust-preloader").show();
-    $("#customer-info-content").hide().empty();
+    $("#customer-info-content").hide();
     $("#custom-field-content").hide();
-    $("#convert-customer").prop('checked', false).prop('disabled', false);
+    $("#convert-customer").prop('checked', false);
     $("#cust-info-submit").prop('disabled', true);
     $("#view-customer-info").modal({
         backdrop: 'static',
         show: true
     });
-
-    var fieldTitle = function(key) {
-        var s = String(key || '').replace(/_/g, ' ');
-        try {
-            if (typeof String.prototype.toUpperFirstLetters === 'function') {
-                return s.toUpperFirstLetters();
-            }
-        } catch (e) {}
-        return s.replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+    
+    var postData = {
+        goAction: 'goGetCustomerInfo',
+        goUser: uName,
+        goPass: uPass,
+        goLeadID: leadid,
+        responsetype: 'json'
     };
-    var stopCustSpinner = function() {
-        $(".cust-preloader").hide();
-    };
-    var renderCustomerInfo = function(result) {
-        try {
-            if (!result || result.result != 'success') {
-                stopCustSpinner();
-                swal({
-                    title: '<?=$lh->translationFor('error')?>',
-                    text: (result && result.message) ? result.message : 'Could not load contact information.',
-                    type: 'error'
-                });
-                return;
-            }
-            var lead_info = result.lead_info || {};
+    $.ajax({
+        type: 'POST',
+        url: '/php/AgentAPI.php',
+        processData: true,
+        data: postData,
+        dataType: "json",
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }
+    })
+    .done(function (result) {
+        if (result.result == 'success') {
+            var lead_info = result.lead_info;
+            var custom_info = result.custom_info;
             var infoHtml = '';
             var infoTitle = '';
             var colNum = 12;
             var maxLength = 20;
-            var esc = function(v) {
-                return String(v == null ? '' : v)
-                    .replace(/&/g, '&amp;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-            };
             $.each(lead_info, function(key, val) {
-                val = (val == null) ? '' : val;
-                if (key == 'address3' || key == 'phone_code' || key == 'status' || key == 'user' || key == 'security_phrase' || key == 'vendor_lead_code' || key == 'province' || key == 'comments') {
-                    return;
+                if (key == 'address3') {
+                    //do nothing
                 } else if (/lead_id|list_id/.test(key)) {
-                    infoHtml += '<input type="hidden" id="viewCust_'+key+'" name="viewCust_'+key+'" value="'+esc(val)+'" />';
+                    infoHtml += '<input type="hidden" id="viewCust_'+key+'" name="viewCust_'+key+'" value="'+val+'" />';
                 } else if (/title|first_name|middle_initial|last_name/.test(key)) {
                     if (key == 'title') {
                         infoHtml += '<div class="row">';
@@ -9447,30 +9035,31 @@ function ViewCustInfo(leadid) {
                         colNum = 4;
                         maxLength = 30;
                     }
-                    infoTitle = fieldTitle(key);
+                    infoTitle = key.replace(/_/g, ' ').toUpperFirstLetters();
                     infoHtml += '<div class="col-sm-'+colNum+'">\
                             <div class="mda-form-group label-floating">\
-                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+esc(val)+'" class="mda-form-control">\
+                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+val+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched">\
                                 <label for="viewCust_'+key+'">'+infoTitle+'</label>\
                             </div>\
                         </div>';
                     if (key == 'last_name') {
                         infoHtml += '</div>';
                     }
-                } else if (/phone_number|alt_phone/.test(key)) {
+                } else if (/phone_code|phone_number|alt_phone/.test(key)) {
                     if (key == 'phone_number') {
                         infoHtml += '<div class="row">';
                     }
+                    
                     colNum = 6;
                     maxLength = (key == 'phone_number') ? 18 : 12;
                     var disableThis = '';
-                    infoTitle = fieldTitle(key);
-                    if (key == 'phone_number' && typeof disable_alter_custphone !== 'undefined' && disable_alter_custphone == 'Y') {
+                    infoTitle = key.replace(/_/g, ' ').toUpperFirstLetters();
+                    if (key == 'phone_number' && disable_alter_custphone == 'Y') {
                         disableThis = 'disabled';
                     }
                     infoHtml += '<div class="col-sm-'+colNum+'">\
                             <div class="mda-form-group label-floating">\
-                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+esc(val)+'" class="mda-form-control" '+disableThis+'>\
+                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+val+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched" '+disableThis+'>\
                                 <label for="viewCust_'+key+'">'+infoTitle+'</label>\
                             </div>\
                         </div>';
@@ -9479,11 +9068,11 @@ function ViewCustInfo(leadid) {
                     }
                 } else if (/address|email/.test(key)) {
                     maxLength = (key == 'email') ? 70 : 100;
-                    infoTitle = fieldTitle(key);
+                    infoTitle = key.replace(/_/g, ' ').toUpperFirstLetters();
                     infoHtml += '<div class="row">\
                         <div class="col-sm-12">\
                             <div class="mda-form-group label-floating">\
-                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+esc(val)+'" class="mda-form-control">\
+                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+val+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched">\
                                 <label for="viewCust_'+key+'">'+infoTitle+'</label>\
                             </div>\
                         </div>\
@@ -9492,6 +9081,7 @@ function ViewCustInfo(leadid) {
                     if (key == 'city') {
                         infoHtml += '<div class="row">';
                     }
+                    
                     colNum = 2;
                     maxLength = 2;
                     maxLength = (key == 'city') ? 50 : maxLength;
@@ -9499,10 +9089,10 @@ function ViewCustInfo(leadid) {
                     maxLength = (key == 'country_code') ? 3 : maxLength;
                     colNum = (key == 'city') ? 5 : colNum;
                     colNum = (key == 'postal_code') ? 3 : colNum;
-                    infoTitle = fieldTitle(key);
+                    infoTitle = key.replace(/_/g, ' ').toUpperFirstLetters();
                     infoHtml += '<div class="col-sm-'+colNum+'">\
                             <div class="mda-form-group label-floating">\
-                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+esc(val)+'" class="mda-form-control">\
+                                <input id="viewCust_'+key+'" name="viewCust_'+key+'" type="text" maxlength="'+maxLength+'" value="'+val+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched">\
                                 <label for="viewCust_'+key+'">'+infoTitle+'</label>\
                             </div>\
                         </div>';
@@ -9510,16 +9100,16 @@ function ViewCustInfo(leadid) {
                         infoHtml += '</div>';
                     }
                 } else if (/gender|date_of_birth/.test(key)) {
-                    infoTitle = fieldTitle(key);
+                    infoTitle = key.replace(/_/g, ' ').toUpperFirstLetters();
                     if (key == 'gender') {
-                        var selectNone = (val === '' || val === 'U') ? 'selected' : '';
+                        var selectNone = (val === '') ? 'selected' : '';
                         var selectMale = (val == 'M') ? 'selected' : '';
                         var selectFemale = (val == 'F') ? 'selected' : '';
                         infoHtml += '<div class="row">\
                             <div class="col-sm-6">\
                                 <div class="mda-form-group label-floating">\
-                                    <select id="viewCust_'+key+'" name="viewCust_'+key+'" class="mda-form-control select">\
-                                        <option '+selectNone+' value="U"></option>\
+                                    <select id="viewCust_'+key+'" name="viewCust_'+key+'" value="'+val+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched select">\
+                                        <option '+selectNone+' disabled value=""></option>\
                                         <option '+selectMale+' value="M">Male</option>\
                                         <option '+selectFemale+' value="F">Female</option>\
                                     </select>\
@@ -9528,91 +9118,93 @@ function ViewCustInfo(leadid) {
                             </div>';
                     }
                     if (key == 'date_of_birth') {
-                        var dob = String(val).indexOf('0000') === 0 ? '' : val;
                         infoHtml += '<div class="col-sm-6">\
                                 <div class="mda-form-group label-floating">\
-                                    <input type="date" id="viewCust_'+key+'" value="'+esc(dob)+'" name="viewCust_'+key+'" class="mda-form-control">\
+                                    <input type="date" id="viewCust_'+key+'" value="'+val+'" name="viewCust_'+key+'" class="mda-form-control ng-pristine ng-empty ng-invalid ng-invalid-required ng-touched">\
                                     <label for="viewCust_'+key+'">'+infoTitle+'</label>\
                                 </div>\
                             </div>\
                         </div>';
                     }
+                } else {
+                    //do nothing right now
                 }
             });
-            if (typeof lead_info.comments !== 'undefined') {
-                infoHtml += '<div class="row"><div class="col-sm-12"><div class="mda-form-group label-floating">\
-                    <input id="viewCust_comments" name="viewCust_comments" type="text" maxlength="255" value="'+esc(lead_info.comments)+'" class="mda-form-control">\
-                    <label for="viewCust_comments">Comments</label>\
-                </div></div></div>';
+            
+            var unloadPreloader = true;
+            if (custom_fields_enabled > 0) {
+                unloadPreloader = false;
+                GetCustomFields(lead_info.list_id, false, true, true);
+                var fieldsPopulated = setInterval(function() {
+                    if (getFields) {
+                        clearInterval(fieldsPopulated);
+                        
+                        if (custom_info !== null) {
+                            $.each(custom_info, function(key, val) {
+                                if (val == null) return true;
+                                var custom_type = $("[id='viewCustom_"+key+"']").prop("tagName");
+                                
+                                switch (custom_type) {
+                                    case "INPUT":
+                                    case "TEXTAREA":
+                                        $("#custom-field-content [id='viewCustom_" + key + "']").val(val);
+                                        break;
+                                    case "SPAN":
+                                    case "DIV":
+                                        $("#custom-field-content [id='viewCustom_" + key + "']").html(val);
+                                        break;
+                                    case "SELECT":
+                                        var selectThis = val.split(',');
+                                        $.each($("#custom-field-content [id='viewCustom_" + key + "'] option"), function() {
+                                            if (selectThis.indexOf($(this).val()) > -1) {
+                                                $(this).prop('selected', true);
+                                            } else {
+                                                $(this).prop('selected', false);
+                                            }
+                                        });
+                                        break;
+                                    default:
+                                        var checkThis = val.split(',');
+                                        $.each($("#custom-field-content [id^='viewCustom_" + key + "']"), function() {
+                                            if (checkThis.indexOf($(this).val()) > -1) {
+                                                $(this).prop('checked', true);
+                                            } else {
+                                                $(this).prop('checked', false);
+                                            }
+                                        });
+                                }
+                            });
+                        }
+                        
+                        replaceCustomFields(true);
+                        $(".cust-preloader").hide();
+                        GetCustomFields(null, true, false, true);
+                    } else {
+                        unloadPreloader = true;
+                        $(".cust-preloader").hide();
+                    }
+                }, 3000);
             }
-
-            stopCustSpinner();
-            $("#customer-info-content").html(infoHtml).slideDown();
-            $("#cust-info-submit").prop('disabled', false);
-            if (result.is_customer > 0) {
-                $("#convert-customer").prop('checked', true);
-                $("#convert-customer").prop('disabled', true);
-            }
-        } catch (err) {
-            stopCustSpinner();
-            console.error('ViewCustInfo render error', err);
+            
+            setTimeout(function() {
+                if (unloadPreloader) {
+                    $(".cust-preloader").hide();
+                }
+                $("#customer-info-content").html(infoHtml).slideDown();
+                $("#cust-info-submit").prop('disabled', false);
+                if (result.is_customer > 0) {
+                    $("#convert-customer").prop('checked', true);
+                    $("#convert-customer").prop('disabled', true);
+                }
+            }, 2000);
+        } else {
             swal({
                 title: '<?=$lh->translationFor('error')?>',
-                text: 'Could not display contact information.',
+                text: result.message,
                 type: 'error'
             });
         }
-    };
-
-    // Local DB first (XAMPP without goAPI customer endpoint)
-    $.ajax({
-        type: 'POST',
-        url: '<?=$goagent_js_url?>',
-        cache: false,
-        data: {
-            module_name: 'GOagent',
-            action: 'LocalGetCustomerInfo',
-            goLeadID: leadid
-        },
-        dataType: 'json',
-        timeout: 15000
-    }).done(function(localRes) {
-        if (localRes && localRes.result === 'success' && localRes.lead_info) {
-            renderCustomerInfo(localRes);
-            return;
-        }
-        fetchCustomerGoApi();
-    }).fail(function() {
-        fetchCustomerGoApi();
     });
-
-    function fetchCustomerGoApi() {
-        $.ajax({
-            type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
-            cache: false,
-            data: {
-                goAction: 'goGetCustomerInfo',
-                goUser: (typeof uName !== 'undefined' ? uName : ''),
-                goPass: (typeof uPass !== 'undefined' ? uPass : ''),
-                goLeadID: leadid,
-                responsetype: 'json'
-            },
-            dataType: 'json',
-            timeout: 15000
-        })
-        .done(function (result) {
-            renderCustomerInfo(result);
-        })
-        .fail(function () {
-            stopCustSpinner();
-            swal({
-                title: '<?=$lh->translationFor('error')?>',
-                text: 'Could not load contact information from the server.',
-                type: 'error'
-            });
-        });
-    }
 }
 
 function ShowURLTabs() {
@@ -9774,7 +9366,7 @@ function PauseCodeSelectSubmit(newpausecode) {
     
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -9829,7 +9421,7 @@ function LoadScriptContents() {
     postData = $.extend(postData, new_vars);
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -9909,7 +9501,7 @@ function VolumeControl(taskdirection, taskvolchannel, taskagentmute) {
     
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -10020,112 +9612,151 @@ function TimerActionRun(taskaction, taskdialalert) {
 
 function getContactList(search_string) {
     if (typeof search_string === 'undefined') var search_string = '';
-    try { $("#contacts-list").dataTable().fnDestroy(); } catch (e) {}
+    $("#contacts-list").dataTable().fnDestroy();
     $("#contacts-list").css('width', '100%');
     $("#contacts-list tbody").empty();
-
-    var finishContactTable = function(result) {
-        if (!result || result.result != 'success') {
-            $(".preloader").fadeOut('slow');
-            return;
-        }
-        var leadsList = result.leads;
-        if (leadsList != null) {
-            $.each(leadsList, function(key, value) {
-                var thisComments = value.comments;
-                var commentTitle = '';
-                if (thisComments !== null && typeof thisComments !== 'undefined') {
-                    if (String(thisComments).length > 20) {
-                        commentTitle = ' title="'+String(thisComments).replace(/"/g,'&quot;')+'"';
-                        thisComments = String(thisComments).substring(0, 20) + "...";
-                    }
-                } else {
-                    thisComments = '';
-                }
-                var customer_name = (value.first_name || '') + ' ' + (value.middle_initial || '') + ' ' + (value.last_name || '');
-                var last_call_time = (value.last_local_call_time || '0000-00-00 00:00:00');
-                var phoneCode = value.phone_code || '1';
-                var phoneNum = String(value.phone_number || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-                var leadEmail = (value.email == null || typeof value.email === 'undefined') ? '' : String(value.email);
-                var appendThis = '<tr data-id="'+value.lead_id+'"><td>'+value.lead_id+'</td><td>'+customer_name+'</td><td>'+value.phone_number+'</td><td>'+last_call_time+'</td><td>'+(value.campaign_id||'')+'</td><td>'+$('<div/>').text(leadEmail).html()+'</td><td'+commentTitle+'>'+thisComments+'</td><td class="text-center" style="white-space: nowrap;"><button type="button" onclick="ViewCustInfo('+value.lead_id+');" class="btn btn-info btn-sm" style="margin: 2px;"><i class="fa fa-file-text-o"></i></button><button type="button" onclick="ManualDialNext(\'\','+value.lead_id+','+phoneCode+',\''+phoneNum+'\',\'\',\'0\');" class="btn btn-primary btn-sm" style="margin: 2px;"><i class="fa fa-phone"></i></button></td></tr>';
-                $("#contacts-list tbody").append(appendThis);
-            });
-        }
-        $("#contacts-list").DataTable({
-            "bDestroy": true,
-            "searching": false,
-            "processing": true,
-            "aoColumnDefs": [
-                { "bSortable": false, "aTargets": [ 7 ] }
-            ],
-            "aaSorting": [[ 0, "desc" ]],
-            "iDisplayLength": 25,
-            "fnInitComplete": function() {
-                $(".preloader").fadeOut('slow');
-                $("#contacts-list_wrapper:first-child div").find('[class="col-sm-6"]:not(:first-child)').html('<div id="contacts-list_filter" class="dataTables_filter"><label>Search:<input type="search" class="form-control input-sm" placeholder="" aria-controls="contacts-list" value="'+search_string+'"></label></div>');
-            }
-        });
-        $("button[id^='dial-lead-'], #contacts-list .btn-primary").removeClass('disabled');
-        var typingTimer;
-        var $searchBox = $("#contacts-list_filter input");
-        $searchBox.off('keyup.localLeads').on('keyup.localLeads', function(e) {
-            clearTimeout(typingTimer);
-            var searching_for = $(this).val();
-            if (searching_for.length >= 2) {
-                typingTimer = setTimeout(function() {
-                    $(".preloader").fadeIn('slow');
-                    getContactList(searching_for);
-                }, 800);
-            }
-        });
+    
+    var postData = {
+        goAction: 'goGetContactList',
+        goUser: uName,
+        goPass: uPass,
+        //goLimit: 50, sabi ni sir chi itaas daw limit
+        goLimit: 1000,
+        goCampaign: campaign,
+        goLeadSearchMethod: agent_lead_search_method,
+        goIsLoggedIn: is_logged_in,
+        goSearchString: search_string,
+        responsetype: 'json'
     };
-
+    
     $.ajax({
         type: 'POST',
-        url: '<?=$goagent_js_url?>',
-        data: {
-            module_name: 'GOagent',
-            action: 'LocalGetContactList',
-            goCampaign: (typeof campaign !== 'undefined' ? campaign : ''),
-            goSearchString: search_string,
-            goLimit: 1000
-        },
-        dataType: 'json',
-        timeout: 20000
-    }).done(function(localRes) {
-        if (localRes && localRes.result === 'success') {
-            finishContactTable(localRes);
-            return;
+        url: '/php/AgentAPI.php',
+        processData: true,
+        data: postData,
+        dataType: "json",
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
         }
-        fetchContactsGoApi();
-    }).fail(function() {
-        fetchContactsGoApi();
-    });
-
-    function fetchContactsGoApi() {
-        $.ajax({
-            type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
-            data: {
-                goAction: 'goGetContactList',
-                goUser: uName,
-                goPass: uPass,
-                goLimit: 1000,
-                goCampaign: campaign,
-                goLeadSearchMethod: (typeof agent_lead_search_method !== 'undefined' ? agent_lead_search_method : 'CAMPLISTS'),
-                goIsLoggedIn: is_logged_in,
-                goSearchString: search_string,
-                responsetype: 'json'
-            },
-            dataType: 'json',
-            timeout: 20000
-        }).done(function(result) {
-            finishContactTable(result);
-        }).fail(function() {
+    })
+    .done(function (result) {
+        if (result.result == 'success') {
+            var leadsList = result.leads;
+            if (leadsList != null) {
+                $.each(leadsList, function(key, value) {
+                    var thisComments = value.comments;
+                    var commentTitle = '';
+                    if (thisComments !== null) {
+                        if (thisComments.length > 20) {
+                            commentTitle = ' title="'+thisComments+'"';
+                            thisComments = thisComments.substring(0, 20) + "...";
+                        }
+                    }
+                    
+                    var customer_name = (value.first_name || '') + ' ' + (value.middle_initial || '') + ' ' + (value.last_name || '');
+                    var last_call_time = (value.last_local_call_time || '0000-00-00 00:00:00');
+                    var appendThis = '<tr data-id="'+value.lead_id+'"><td>'+value.lead_id+'</td><td>'+customer_name+'</td><td>'+value.phone_number+'</td><td>'+last_call_time+'</td><td>'+value.campaign_id+'</td><td>'+value.status+'</td><td'+commentTitle+'>'+thisComments+'</td><td class="text-center" style="white-space: nowrap;"><button id="lead-info-'+value.lead_id+'" data-leadid="'+value.lead_id+'" onclick="ViewCustInfo('+value.lead_id+');" class="btn btn-info btn-sm" style="margin: 2px;" title="<?=$lh->translationFor('view_contact_info')?>"><i class="fa fa-file-text-o"></i></button><button id="dial-lead-'+value.lead_id+'" data-leadid="'+value.lead_id+'" onclick="ManualDialNext(\'\','+value.lead_id+','+value.phone_code+','+value.phone_number+',\'\',\'0\');" class="btn btn-primary btn-sm disabled" style="margin: 2px;" title="<?=$lh->translationFor('call_contact_number')?>"><i class="fa fa-phone"></i></button></td></tr>';
+                    $("#contacts-list tbody").append(appendThis);
+                });
+            }
+            $("#contacts-list").css('width', '100%');
+            $("#contacts-list").DataTable({
+                "bDestroy": true,
+                "searching": false,
+                "processing": true,
+                "aoColumnDefs": [{
+                    "bSortable": false,
+                    "aTargets": [ 7 ],
+                }, {
+                    "bSearchable": false,
+                    "aTargets": [ 3, 5, 7 ]
+                }, {
+                    "sClass": "hidden-xs",
+                    "aTargets": [ 0 ]
+                }, {
+                    "sClass": "hidden-xs hidden-sm",
+                    "aTargets": [ 1 ]
+                }, {
+                    "sClass": "visible-md visible-lg",
+                    "aTargets": [ 4, 5 ]
+                }, {
+                    "sClass": "visible-lg",
+                    "aTargets": [ 3, 6 ]
+                }],
+                "fnInitComplete": function() {
+                    $(".preloader").fadeOut('slow');
+                    $("#contacts-list_wrapper:first-child div").find('[class="col-sm-6"]:not(:first-child)').html('<div id="contacts-list_filter" class="dataTables_filter"><label>Search:<input type="search" class="form-control input-sm" placeholder="" aria-controls="contacts-list" value="'+search_string+'"></label></div>');
+                }
+            });
+            $("#contacts-list_filter").parent('div').attr('class', 'col-sm-6 hidden-xs');
+            $("#contacts-list_length").parent('div').attr('class', 'col-xs-12 col-sm-6');
+            $("#contents-contacts").find("div.dataTables_info").parent('div').attr('class', 'col-xs-12 col-sm-6');
+            $("#contents-contacts").find("div.dataTables_paginate").parent('div').attr('class', 'col-xs-12 col-sm-6');
+            if (!is_logged_in || (is_logged_in && (use_webrtc && !phoneRegistered))) {
+                $("button[id^='dial-lead-']").addClass('disabled');
+            } else {
+                $("button[id^='dial-lead-']").removeClass('disabled');
+            }
+            
+            $('#contacts-list').on('draw.dt', function() {
+                if (!is_logged_in || (is_logged_in && (use_webrtc && !phoneRegistered))) {
+                    $("button[id^='dial-lead-']").addClass('disabled');
+                } else {
+                    $("button[id^='dial-lead-']").removeClass('disabled');
+                }
+            });
+            
+            var typingTimer;
+            var autoSearch = true;
+            var doneTypingInterval = 1000;
+            var $searchBox = $("#contacts-list_filter input");
+            $searchBox.on('keyup', function(e) {
+                clearTimeout(typingTimer);
+                $thisOne = $(this);
+                var searching_for = $thisOne.val();
+                if (e.which == 13 && searching_for.length < 3) {
+                    $thisOne.blur();
+                    swal({
+                        title: '<?=$lh->translationFor('error')?>',
+                        text: 'Search string should be at least 3 characters.',
+                        type: 'error',
+                        allowEnterKey: false
+                    });
+                }
+                
+                if (searching_for.length >= 3 && autoSearch) {
+                    typingTimer = setTimeout(function() {
+                        $(".preloader").fadeIn('slow');
+                        getContactList(searching_for);
+                    }, doneTypingInterval);
+                }
+            });
+            
+            $searchBox.on('keydown', function (e) {
+                clearTimeout(typingTimer);
+                if (e.which == 13) {
+                    var searching_for = $(this).val();
+                    if (searching_for.length >= 3) {
+                        autoSearch = false;
+                        $(".preloader").fadeIn('slow');
+                        getContactList(searching_for);
+                    }
+                }
+            });
+        } else {
             $(".preloader").fadeOut('slow');
-        });
-    }
+            $("#contacts-list").DataTable();
+            
+            swal({
+                title: '<?=$lh->translationFor('error')?>',
+                text: result.message,
+                type: 'error',
+                html: true
+            });
+        }
+    });
 }
+
 function NoneInSession() {
     //still on development
 }
@@ -10158,7 +9789,7 @@ function ShowCBDatePicker(cbId, cbDate, cbComment) {
     
         $.ajax({
             type: 'POST',
-            url: '<?=$goAPI?>/goAgent/goAPI.php',
+            url: '/php/AgentAPI.php',
             processData: true,
             data: postData,
             dataType: "json",
@@ -10214,7 +9845,7 @@ function ReschedCallback(cbId, cbDate, cbComment, cbOnly) {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -10262,10 +9893,6 @@ function MainPanelToFront() {
     
     $("#cust_info").show();
     $("#loaded-contents").hide();
-    $("#loaded-contents [id^='contents-']").hide();
-    if (window.location.hash.length > 0) {
-        history.replaceState('', document.title, window.location.pathname);
-    }
     $(".content-heading ol").html('<li class="active"><i class="fa fa-home"></i> <?=$lh->translationFor('home')?></li>');
 }
 
@@ -10362,7 +9989,7 @@ function GetAgentSalesCount() {
 
     $.ajax({
         type: 'POST',
-        url: '<?=$goAPI?>/goAgent/goAPI.php',
+        url: '/php/AgentAPI.php',
         processData: true,
         data: postData,
         dataType: "json",
@@ -10445,11 +10072,9 @@ function URLDecode(encodedvar, scriptformat, urlschema, webformnumber) {
 		"&security_phrase=" + $(".formMain input[name='security_phrase']").val() + 
 		"&comments=" + $(".formMain textarea[name='comments']").val() + 
 		"&user=" + uName + 
-		"&pass=" + uPass + 
 		"&campaign=" + campaign + 
 		"&phone_login=" + phone_login + 
 		"&original_phone_login=" + original_phone_login +
-		"&phone_pass=" + phone_pass + 
 		"&fronter=" + fronter + 
 		"&closer=" + user + 
 		"&group=" + group + 
@@ -10657,7 +10282,7 @@ function URLDecode(encodedvar, scriptformat, urlschema, webformnumber) {
 		var SCfullname = LOGfullname;
 		var SCfronter = fronter;
 		var SCuser = uName;
-		var SCpass = uPass;
+		var SCpass = ''; // External scripts must not receive account passwords.
 		var SClead_id = $(".formMain input[name='lead_id']").val();
 		var SCcampaign = campaign;
 		var SCphone_login = phone_login;
@@ -11101,420 +10726,6 @@ Number.prototype.between = function (a, b, inclusive) {
 } else {
     if ($_REQUEST['module_name'] == 'GOagent') {
         switch ($_REQUEST['action']) {
-            case "GetAllowedCampaigns":
-                header('Content-Type: application/json');
-                @include_once GO_BASE_DIRECTORY . '/php/Config.php';
-                $localDev = defined('CRM_LOGIN_LOCAL_DB_FALLBACK') && CRM_LOGIN_LOCAL_DB_FALLBACK === true;
-
-                $campaigns = array();
-                // Always try local vicidial_campaigns (XAMPP / offline)
-                try {
-                    $host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-                    $user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-                    $pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-                    $port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-                    $dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-                    $mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-                    if (!$mysqli->connect_errno) {
-                        $mysqli->set_charset('utf8mb4');
-                        $q = $mysqli->query("SELECT campaign_id, campaign_name FROM vicidial_campaigns WHERE active='Y' ORDER BY campaign_id");
-                        if ($q) {
-                            while ($row = $q->fetch_assoc()) {
-                                $campaigns[$row['campaign_id']] = $row['campaign_name'] !== ''
-                                    ? $row['campaign_name']
-                                    : $row['campaign_id'];
-                            }
-                        }
-                        $mysqli->close();
-                    }
-                } catch (\Throwable $e) {
-                    $campaigns = array();
-                }
-
-                if (!empty($campaigns)) {
-                    $result = json_encode(array(
-                        'result' => 'success',
-                        'message' => $localDev ? 'Local campaign list.' : 'Campaign list from database.',
-                        'data' => array('allowed_campaigns' => $campaigns),
-                    ), JSON_UNESCAPED_SLASHES);
-                    break;
-                }
-
-                if ($localDev) {
-                    $result = json_encode(array(
-                        'result' => 'success',
-                        'message' => 'Local development campaign list (goAPI not used).',
-                        'data' => array(
-                            'allowed_campaigns' => array(
-                                'DEVLOCAL' => 'Local Dev Campaign',
-                            ),
-                        ),
-                    ), JSON_UNESCAPED_SLASHES);
-                    break;
-                }
-                require_once(GO_BASE_DIRECTORY . '/php/GoHttpClient.php');
-                $agentUser = isset($_REQUEST['goUser']) ? $_REQUEST['goUser'] : ($_SESSION['user'] ?? '');
-                $agentPass = isset($_REQUEST['goPass']) ? $_REQUEST['goPass'] : ($_SESSION['phone_this'] ?? '');
-                $apiFields = array(
-                    'goAction' => 'goGetAllowedCampaigns',
-                    'goUser' => $agentUser,
-                    'goPass' => $agentPass,
-                    'responsetype' => 'json',
-                );
-                $apiUrl = gourl . '/goAgent/goAPI.php';
-                $raw = \creamy\GoHttpClient::post($apiUrl, $apiFields, 3);
-                $decoded = is_string($raw) ? json_decode($raw) : null;
-                if (is_object($decoded) && isset($decoded->result) && $decoded->result === 'success') {
-                    $result = json_encode($decoded, JSON_UNESCAPED_SLASHES);
-                } else {
-                    $result = json_encode(array(
-                        'result' => 'error',
-                        'message' => 'GOautodial goAPI is not available at ' . gourl . '.',
-                    ), JSON_UNESCAPED_SLASHES);
-                }
-                break;
-            case "LocalLoginUser":
-                header('Content-Type: application/json');
-                @include_once GO_BASE_DIRECTORY . '/php/Config.php';
-                $localDev = defined('CRM_LOGIN_LOCAL_DB_FALLBACK') && CRM_LOGIN_LOCAL_DB_FALLBACK === true;
-                $campId = isset($_REQUEST['goCampaign']) ? trim((string) $_REQUEST['goCampaign']) : '';
-                if ($localDev && $campId !== '') {
-                    $_SESSION['campaign_id'] = $campId;
-                    $_SESSION['is_logged_in'] = 1;
-                    $result = json_encode(array(
-                        'result' => 'success',
-                        'message' => 'Local dialer login (no Asterisk session). Manual UI + lead list enabled.',
-                        'data' => array(
-                            'campaign_id' => $campId,
-                            'campaign_settings' => array(
-                                'campaign_id' => $campId,
-                                'dial_method' => 'MANUAL',
-                                'auto_dial_level' => '0',
-                                'campaign_recording' => 'NEVER',
-                                'agent_lead_search' => 'ENABLED',
-                                'agent_lead_search_method' => 'CAMPLISTS',
-                            ),
-                            'agent_lead_search_override' => 'ENABLED',
-                        ),
-                    ), JSON_UNESCAPED_SLASHES);
-                } else {
-                    $result = json_encode(array(
-                        'result' => 'error',
-                        'message' => 'Local dialer login is disabled.',
-                    ), JSON_UNESCAPED_SLASHES);
-                }
-                break;
-            case "LocalLogoutUser":
-                header('Content-Type: application/json');
-                $_SESSION['is_logged_in'] = 0;
-                if (isset($_SESSION['campaign_id'])) {
-                    unset($_SESSION['campaign_id']);
-                }
-                $result = json_encode(array(
-                    'result' => 'success',
-                    'message' => 'Local dialer logout OK.',
-                    'is_logged_in' => 0,
-                ), JSON_UNESCAPED_SLASHES);
-                break;
-            case "LocalGetCustomerInfo":
-                header('Content-Type: application/json');
-                @include_once GO_BASE_DIRECTORY . '/php/Config.php';
-                $leadId = isset($_REQUEST['goLeadID']) ? (int) $_REQUEST['goLeadID'] : 0;
-                if ($leadId < 1) {
-                    $result = json_encode(array('result' => 'error', 'message' => 'You did NOT specify a valid Lead ID'));
-                    break;
-                }
-                $lead_info = null;
-                $is_customer = 0;
-                try {
-                    $host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-                    $user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-                    $pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-                    $port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-                    $dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-                    $mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-                    if (!$mysqli->connect_errno) {
-                        $mysqli->set_charset('utf8mb4');
-                        $stmt = $mysqli->prepare("SELECT lead_id,list_id,title,first_name,middle_initial,last_name,phone_code,phone_number,alt_phone,email,address1,address2,address3,city,state,province,postal_code,country_code,gender,date_of_birth,status,user,comments,security_phrase,vendor_lead_code FROM vicidial_list WHERE lead_id = ? LIMIT 1");
-                        $stmt->bind_param('i', $leadId);
-                        $stmt->execute();
-                        $res = $stmt->get_result();
-                        $lead_info = $res ? $res->fetch_assoc() : null;
-                        $stmt->close();
-                        $mysqli->close();
-                    }
-                    // Optional CRM customer flag
-                    $crmDb = defined('DB_NAME') ? DB_NAME : 'goautodial';
-                    $crm = @new \mysqli($host, $user, $pass, $crmDb, $port);
-                    if (!$crm->connect_errno && $lead_info) {
-                        $crm->set_charset('utf8mb4');
-                        $chk = $crm->prepare("SELECT 1 FROM go_customers WHERE lead_id = ? LIMIT 1");
-                        if ($chk) {
-                            $chk->bind_param('i', $leadId);
-                            $chk->execute();
-                            $chk->store_result();
-                            $is_customer = $chk->num_rows > 0 ? 1 : 0;
-                            $chk->close();
-                        }
-                        $crm->close();
-                    }
-                } catch (\Throwable $e) {
-                    $lead_info = null;
-                }
-                if ($lead_info) {
-                    // Normalize nulls to empty strings for form fields
-                    foreach ($lead_info as $k => $v) {
-                        if ($v === null) {
-                            $lead_info[$k] = '';
-                        }
-                    }
-                    $result = json_encode(array(
-                        'result' => 'success',
-                        'lead_info' => $lead_info,
-                        'custom_info' => null,
-                        'is_customer' => $is_customer,
-                    ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                } else {
-                    $result = json_encode(array(
-                        'result' => 'error',
-                        'message' => "Lead ID '{$leadId}' does NOT exist on the database",
-                    ));
-                }
-                break;
-            case "LocalUpdateCustomer":
-                header('Content-Type: application/json');
-                @include_once GO_BASE_DIRECTORY . '/php/Config.php';
-                $rawLead = isset($_REQUEST['goLeadInfo']) ? $_REQUEST['goLeadInfo'] : array();
-                if (is_string($rawLead)) {
-                    $decoded = json_decode($rawLead, true);
-                    if (is_array($decoded)) {
-                        $rawLead = $decoded;
-                    }
-                }
-                $fields = array();
-                if (is_array($rawLead)) {
-                    // serializeArray style: [{name,value}, ...]
-                    $isList = array_keys($rawLead) === range(0, count($rawLead) - 1);
-                    if ($isList) {
-                        foreach ($rawLead as $item) {
-                            if (!is_array($item)) {
-                                continue;
-                            }
-                            $n = isset($item['name']) ? (string) $item['name'] : '';
-                            $v = isset($item['value']) ? $item['value'] : '';
-                            $n = preg_replace('/^viewCust_/', '', $n);
-                            if ($n !== '') {
-                                $fields[$n] = $v;
-                            }
-                        }
-                    } else {
-                        foreach ($rawLead as $n => $v) {
-                            $n = preg_replace('/^viewCust_/', '', (string) $n);
-                            if ($n !== '') {
-                                $fields[$n] = $v;
-                            }
-                        }
-                    }
-                }
-                $leadId = isset($fields['lead_id']) ? (int) $fields['lead_id'] : 0;
-                if ($leadId < 1) {
-                    $result = json_encode(array('result' => 'error', 'message' => 'You did NOT specify a valid Lead ID'));
-                    break;
-                }
-                $allowed = array(
-                    'title' => 4, 'first_name' => 30, 'middle_initial' => 1, 'last_name' => 30,
-                    'phone_number' => 18, 'alt_phone' => 12, 'email' => 70,
-                    'address1' => 100, 'address2' => 100, 'city' => 50, 'state' => 2,
-                    'postal_code' => 10, 'country_code' => 3, 'gender' => 1,
-                    'date_of_birth' => 10, 'comments' => 255, 'list_id' => 0,
-                );
-                $sets = array();
-                $types = '';
-                $binds = array();
-                foreach ($allowed as $col => $maxLen) {
-                    if (!array_key_exists($col, $fields)) {
-                        continue;
-                    }
-                    $val = $fields[$col];
-                    if ($col === 'list_id') {
-                        $val = (int) $val;
-                        if ($val < 1) {
-                            continue;
-                        }
-                        $sets[] = 'list_id=?';
-                        $types .= 'i';
-                        $binds[] = $val;
-                        continue;
-                    }
-                    if ($col === 'gender') {
-                        $g = strtoupper(substr((string) $val, 0, 1));
-                        $val = in_array($g, array('M', 'F', 'U'), true) ? $g : 'U';
-                    } elseif ($col === 'date_of_birth') {
-                        $dob = trim((string) $val);
-                        if ($dob === '' || strpos($dob, '0000') === 0) {
-                            $val = '0000-00-00';
-                        } elseif (($ts = strtotime($dob)) !== false) {
-                            $val = date('Y-m-d', $ts);
-                        } else {
-                            continue;
-                        }
-                    } elseif ($col === 'phone_number' || $col === 'alt_phone') {
-                        $val = substr(preg_replace('/[^0-9]/', '', (string) $val), 0, $maxLen);
-                    } else {
-                        $val = substr((string) $val, 0, $maxLen);
-                    }
-                    $sets[] = $col . '=?';
-                    $types .= 's';
-                    $binds[] = $val;
-                }
-                if (empty($sets)) {
-                    $result = json_encode(array('result' => 'error', 'message' => 'No fields to update'));
-                    break;
-                }
-                $saveAsCustomer = !empty($_REQUEST['goSaveAsCustomer']) && $_REQUEST['goSaveAsCustomer'] !== 'false' && $_REQUEST['goSaveAsCustomer'] !== '0';
-                $ok = false;
-                $errMsg = 'Database update failed';
-                try {
-                    $host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-                    $user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-                    $pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-                    $port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-                    $dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-                    $mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-                    if (!$mysqli->connect_errno) {
-                        $mysqli->set_charset('utf8mb4');
-                        $sql = 'UPDATE vicidial_list SET ' . implode(', ', $sets) . ' WHERE lead_id=? LIMIT 1';
-                        $types .= 'i';
-                        $binds[] = $leadId;
-                        $stmt = $mysqli->prepare($sql);
-                        if ($stmt) {
-                            $bindParams = array($types);
-                            foreach ($binds as $k => $v) {
-                                $bindParams[] = &$binds[$k];
-                            }
-                            call_user_func_array(array($stmt, 'bind_param'), $bindParams);
-                            $ok = $stmt->execute();
-                            if (!$ok) {
-                                $errMsg = $stmt->error ?: $errMsg;
-                            }
-                            $stmt->close();
-                        } else {
-                            $errMsg = $mysqli->error ?: $errMsg;
-                        }
-                        $mysqli->close();
-                    } else {
-                        $errMsg = 'Could not connect to database';
-                    }
-                    if ($ok && $saveAsCustomer) {
-                        $crmDb = defined('DB_NAME') ? DB_NAME : 'goautodial';
-                        $crm = @new \mysqli($host, $user, $pass, $crmDb, $port);
-                        if (!$crm->connect_errno) {
-                            $crm->set_charset('utf8mb4');
-                            $chk = $crm->prepare('SELECT 1 FROM go_customers WHERE lead_id = ? LIMIT 1');
-                            $exists = false;
-                            if ($chk) {
-                                $chk->bind_param('i', $leadId);
-                                $chk->execute();
-                                $chk->store_result();
-                                $exists = $chk->num_rows > 0;
-                                $chk->close();
-                            }
-                            if (!$exists) {
-                                $ins = @$crm->query("INSERT INTO go_customers (lead_id) VALUES ({$leadId})");
-                                // Ignore insert failure if schema differs — lead update already succeeded
-                            }
-                            $crm->close();
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    $ok = false;
-                    $errMsg = 'Update exception';
-                }
-                if ($ok) {
-                    $result = json_encode(array(
-                        'result' => 'success',
-                        'message' => "Lead {$leadId} updated successfully.",
-                    ), JSON_UNESCAPED_SLASHES);
-                } else {
-                    $result = json_encode(array(
-                        'result' => 'error',
-                        'message' => $errMsg,
-                    ));
-                }
-                break;
-            case "LocalGetContactList":
-                header('Content-Type: application/json');
-                @include_once GO_BASE_DIRECTORY . '/php/Config.php';
-                $campId = isset($_REQUEST['goCampaign']) ? trim((string) $_REQUEST['goCampaign']) : (isset($_SESSION['campaign_id']) ? (string) $_SESSION['campaign_id'] : '');
-                $search = isset($_REQUEST['goSearchString']) ? trim((string) $_REQUEST['goSearchString']) : '';
-                $limit = isset($_REQUEST['goLimit']) ? (int) $_REQUEST['goLimit'] : 1000;
-                if ($limit < 1 || $limit > 5000) {
-                    $limit = 1000;
-                }
-                $leads = array();
-                try {
-                    $host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-                    $user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-                    $pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-                    $port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-                    $dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-                    $mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-                    if (!$mysqli->connect_errno) {
-                        $mysqli->set_charset('utf8mb4');
-                        $listIds = array();
-                        if ($campId !== '') {
-                            $stmt = $mysqli->prepare("SELECT list_id FROM vicidial_lists WHERE campaign_id = ? AND active = 'Y'");
-                            $stmt->bind_param('s', $campId);
-                            $stmt->execute();
-                            $res = $stmt->get_result();
-                            while ($row = $res->fetch_assoc()) {
-                                $listIds[] = (int) $row['list_id'];
-                            }
-                            $stmt->close();
-                        }
-                        if (empty($listIds)) {
-                            $q = $mysqli->query("SELECT list_id FROM vicidial_lists WHERE active='Y'");
-                            if ($q) {
-                                while ($row = $q->fetch_assoc()) {
-                                    $listIds[] = (int) $row['list_id'];
-                                }
-                            }
-                        }
-                        if (!empty($listIds)) {
-                            $in = implode(',', array_map('intval', $listIds));
-                            $sql = "SELECT vl.lead_id, vl.first_name, vl.middle_initial, vl.last_name, vl.phone_number,
-                                    vl.last_local_call_time, COALESCE(vls.campaign_id, '') AS campaign_id, vl.email, vl.status, vl.comments, vl.phone_code
-                                    FROM vicidial_list vl
-                                    LEFT JOIN vicidial_lists vls ON vls.list_id = vl.list_id
-                                    WHERE vl.list_id IN ($in) AND vl.status NOT IN ('DNC','DNCL')";
-                            if (strlen($search) >= 2) {
-                                $like = '%' . $mysqli->real_escape_string($search) . '%';
-                                $sql .= " AND (CONCAT(IFNULL(vl.first_name,''),' ',IFNULL(vl.last_name,'')) LIKE '{$like}'
-                                          OR vl.phone_number LIKE '{$like}'
-                                          OR CAST(vl.lead_id AS CHAR) LIKE '{$like}'
-                                          OR IFNULL(vl.email,'') LIKE '{$like}'
-                                          OR IFNULL(vl.comments,'') LIKE '{$like}')";
-                            }
-                            $sql .= " ORDER BY vl.lead_id DESC LIMIT {$limit}";
-                            $q = $mysqli->query($sql);
-                            if ($q) {
-                                while ($row = $q->fetch_assoc()) {
-                                    $leads[] = $row;
-                                }
-                            }
-                        }
-                        $mysqli->close();
-                    }
-                } catch (\Throwable $e) {
-                    $leads = array();
-                }
-                $result = json_encode(array(
-                    'result' => 'success',
-                    'leads' => $leads,
-                    'count' => count($leads),
-                    'campaign' => $campId,
-                ), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-                break;
             case "CheckWebRTC":
                 $user = \creamy\CreamyUser::currentUser();
                 //$result = array(
@@ -11543,11 +10754,9 @@ Number.prototype.between = function (a, b, inclusive) {
                 $result = json_encode($result);
                 break;
             case "UpdateMessages":
-                require_once(GO_BASE_DIRECTORY.'/php/UIHandler.php');
-                $ui = \creamy\UIHandler::getInstance();
                 $user = \creamy\CreamyUser::currentUser();
                 $folder = $_REQUEST['folder'];
-                $user_id = $_REQUEST['user_id'];
+                $user_id = $_SESSION['userid'];
                 $updates = array(
                     'result' => 'success',
                     'folders' => $ui->getMessageFoldersAsList($folder),
@@ -11558,12 +10767,10 @@ Number.prototype.between = function (a, b, inclusive) {
                 $result = json_encode($updates, JSON_UNESCAPED_SLASHES);
                 break;
             case "ReadMessage":
-                require_once(GO_BASE_DIRECTORY.'/php/UIHandler.php');
-                $ui = \creamy\UIHandler::getInstance();
                 $db = new \creamy\DbHandler();
                 $user = \creamy\CreamyUser::currentUser();
                 $folder = $_REQUEST['folder'];
-                $user_id = $_REQUEST['user_id'];
+                $user_id = $_SESSION['userid'];
                 $messageid = $_REQUEST['messageid'];
                 
                 // retrieve data about the message and sending user.
@@ -11622,8 +10829,8 @@ Number.prototype.between = function (a, b, inclusive) {
     curl_setopt($ch, CURLOPT_POST, count($fields));
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $fields_string);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     
     //execute post
     $data = curl_exec($ch);

@@ -1,0 +1,16 @@
+.git
+vendor
+.env
+.env.*
+tmp
+tests
+docs
+config
+astguiclient.conf
+goautodial.conf
+installed.txt
+uploads/*
+!uploads/.htaccess
+img/avatars/*
+!img/avatars/default
+!img/avatars/.htaccess

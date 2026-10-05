@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		agent.php
  * @brief 		Agent application
@@ -28,18 +30,7 @@ require_once('./php/LanguageHandler.php');
 require_once('./php/DbHandler.php');
 require_once('./php/ModuleHandler.php');
 
-define('GO_BASE_DIRECTORY', (function () {
-	$docRoot = str_replace('\\', '/', rtrim($_SERVER['DOCUMENT_ROOT'] ?? '', '/\\'));
-	$baseAbs = str_replace('\\', '/', dirname(__FILE__));
-	$webBase = (strpos($baseAbs, $docRoot) === 0) ? substr($baseAbs, strlen($docRoot)) : '';
-	if ($webBase === '' || ($webBase[0] ?? '') !== '/') {
-		$webBase = '/' . ltrim((string) $webBase, '/');
-	}
-	if ($webBase === '/' || $webBase === '') {
-		$webBase = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
-	}
-	return rtrim($webBase, '/') ?: '';
-})());
+define('GO_BASE_DIRECTORY', str_replace($_SERVER['DOCUMENT_ROOT'], "", dirname(__FILE__)));
 
 // initialize structures
 require_once('./php/Session.php');
@@ -59,23 +50,12 @@ if($user->getUserRole() != CRM_DEFAULTS_USER_ROLE_AGENT){
     header("location: index.php");
 }
 
-$lead_id = isset($_GET['lead_id']) ? $_GET['lead_id'] : '';
-$first_name = $middle_initial = $last_name = $email = $phone_number = $alt_phone = '';
-$address1 = $address2 = $address3 = $city = $state = $country = $gender = $comments = $title = '';
-$date_of_birth = $call_count = $last_local_call_time = $province = $postal_code = '';
-$lead_list_id = $entry_list_id = $vendor_lead_code = $gmt_offset_now = $security_phrase = $rank = $uniqueid = $phone_code = '';
-
+$lead_id = $_GET['lead_id'];
 $output = $api->API_getLeadsInfo($lead_id);
-$list_id_rows = (is_object($output) && isset($output->list_id) && (is_array($output->list_id) || $output->list_id instanceof \Countable))
-	? $output->list_id
-	: [];
-$list_id_ct = count($list_id_rows);
+$list_id_ct = count($output->list_id);
 
 if ($list_id_ct > 0) {
 	for($i=0;$i < $list_id_ct;$i++){
-		if (isset($output->list_id[$i])) {
-			$lead_list_id = $output->list_id[$i];
-		}
 		$first_name 	= $output->first_name[$i];
 		$middle_initial = $output->middle_initial[$i];
 		$last_name 		= $output->last_name[$i];
@@ -97,10 +77,8 @@ if ($list_id_ct > 0) {
 		$last_local_call_time = $output->last_local_call_time[$i];
 	}
 }
-$fullname = trim($title.' '.$first_name.' '.$middle_initial.' '.$last_name);
-if (!empty($date_of_birth) && strtotime($date_of_birth) !== false) {
-	$date_of_birth = date('Y-m-d', strtotime($date_of_birth));
-}
+$fullname = $title.' '.$first_name.' '.$middle_initial.' '.$last_name;
+$date_of_birth = date('Y-m-d', strtotime($date_of_birth));
 //var_dump($output);
  $output_script = $ui->getAgentScript($lead_id, $fullname, $first_name, $last_name, $middle_initial, $email,
  									  $phone_number, $alt_phone, $address1, $address2, $address3, $city, $province, $state, $postal_code, $country);
@@ -116,10 +94,6 @@ if (isset($_GET["message"])) {
 } else $message = NULL;
 
 $user_info = $api->API_getUserInfo($_SESSION['user'], "userInfo");
-
-$totalcallstoday = 0;
-$totalsalestoday = 0;
-$agentname = $user->getUserName();
 
 // ECCS Customization
 if(ECCS_BLIND_MODE != "y"){
@@ -239,18 +213,11 @@ $osTicket = $mh->moduleIsEnabled('osTicket');
 	        <!-- <script src="modules/GoChat/js/chat.js"></script> -->
 
         <script type="text/javascript">
-			var _agentRouteHash = window.location.hash.replace(/^#/, '');
-			if (!/^(profile|messages|callbacks|contacts|notifications|tasks)$/.test(_agentRouteHash)) {
-				history.pushState('', document.title, window.location.pathname);
-			}
+			history.pushState('', document.title, window.location.pathname);
 
 			$(window).load(function() {
 				$(".preloader").fadeOut("slow", function() {
-					if (typeof use_webrtc !== 'undefined' && use_webrtc
-						&& (!!$.prototype.snackbar)
-						&& typeof phone !== 'undefined' && phone
-						&& typeof phone.isConnected === 'function'
-						&& phone.isConnected()) {
+					if (use_webrtc && (!!$.prototype.snackbar) && phone.isConnected()) {
 						$.snackbar({content: "<i class='fa fa-exclamation-circle fa-lg text-warning' aria-hidden='true'></i>&nbsp; Please wait while we register your phone extension to the dialer...", timeout: 3000, htmlAllowed: true});
 					}
 				});
@@ -795,7 +762,7 @@ input:checked + .slider:before {
 												<!--LEAD ID-->
 												<input type="hidden" value="<?php echo $lead_id;?>" name="lead_id">
 												<!--LIST ID-->
-												<input type="hidden" value="<?php echo $lead_list_id;?>" name="list_id">
+												<input type="hidden" value="<?php echo $list_id;?>" name="list_id">
 												<!--ENTRY LIST ID-->
 												<input type="hidden" value="<?php echo $entry_list_id;?>" name="entry_list_id">
 												<!--VENDOR ID-->
@@ -1266,7 +1233,7 @@ input:checked + .slider:before {
 						</div><!-- /.row -->
 
 						<!-- Profile -->
-						<div id="contents-profile" class="row unwrap" style="display: none;">
+						<div class="unwrap" style="display: none;">
 							<div style="background-image: url(img/profile-bg.jpg)" class="bg-cover">
 							   <div class="p-xl text-center text-white">
 									<span style="display:table; margin:0 auto;"><?=$ui->getVueAvatar($_SESSION['user'], $user->getUserAvatar(), 128)?></span>
@@ -1734,7 +1701,7 @@ input:checked + .slider:before {
 												<?=$lh->translationFor('campaign')?>
 											</th>
 											<th>
-												<?=$lh->translationFor('email')?>
+												<?=$lh->translationFor('status')?>
 											</th>
 											<th>
 												<?=$lh->translationFor('comments')?>
@@ -1910,12 +1877,7 @@ input:checked + .slider:before {
 				$numMessages = $db->getUnreadMessagesNumber($user->getUserId());
 				echo $ui->getSidebarItem("#messages", "", $lh->translationFor("messages"), $numMessages, "green");
 				echo $ui->getSidebarItem("#callbackslist", "", $lh->translationFor("callbacks"), "0", "blue");
-				// Show Contacts unless goAPI explicitly disables agent lead search
-				$showContacts = true;
-				if (is_object($user_info) && isset($user_info->data->agent_lead_search_override) && $user_info->data->agent_lead_search_override === 'DISABLED') {
-					$showContacts = false;
-				}
-				if ($showContacts) {
+				if ($user_info->data->agent_lead_search_override != 'DISABLED') {
 					echo $ui->getSidebarItem("#customerslist", "", $lh->translationFor("contacts"), null, "", "agent-lead-search");
 				}
 			}
@@ -1977,30 +1939,6 @@ dding-top: 10px;">
 		<?php include_once "./php/ModalPasswordDialogs.php" ?>
 
 		<?php print $ui->standardizedThemeJS();?>
-		<script type="text/javascript">
-			function agentOpenPanelFromHash() {
-				var hash = (window.location.hash || '').replace(/^#/, '');
-				var panelHashes = ['profile', 'messages', 'callbacks', 'contacts', 'notifications', 'tasks'];
-				if (panelHashes.indexOf(hash) === -1) {
-					return;
-				}
-				$('#cust_info').hide();
-				$('#loaded-contents').show();
-				$('#loaded-contents [id^="contents-"]').each(function() {
-					var panelId = this.id.replace('contents-', '');
-					$(this).toggle(panelId === hash);
-				});
-			}
-			$(document).ready(function() {
-				agentOpenPanelFromHash();
-				$(window).on('hashchange', agentOpenPanelFromHash);
-				$(document).on('click', 'a[href="#profile"]', function(e) {
-					e.preventDefault();
-					window.location.hash = 'profile';
-					agentOpenPanelFromHash();
-				});
-			});
-		</script>
 		<script type="text/javascript">
 			var rcToken = "";
 			$(document).ready(function() {
@@ -2385,7 +2323,7 @@ dding-top: 10px;">
 					var headerLogo = $("header.main-header img").prop('src');
 					$('#message-full-box').printThis({
 						loadCSS: [
-							<?= json_encode(rtrim(str_replace('\\', '/', (string) GO_BASE_DIRECTORY), '/') . '/css/printpage.css', JSON_UNESCAPED_SLASHES) ?>
+							"<?php print GO_BASE_DIRECTORY; ?>/css/printpage.css"
 						],
 						importCSS: false,
 						pageTitle: $("#read-message-subject").text(),

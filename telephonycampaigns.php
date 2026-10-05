@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
  /**
  * @file 		telephonycampaigns.php
  * @brief 		Manage Campaigns, Dispositions & etc.
@@ -120,7 +122,6 @@
         <meta charset="UTF-8">
         <title><?php $lh->translateText('portal_title'); ?> - <?php $lh->translateText("campaigns"); ?></title>
         <meta content='width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no' name='viewport'>
-		<script src="js/go-campaign-wizard-nav.js?v=6"></script>
 
         <?php
 			print $ui->standardizedThemeCSS();
@@ -137,6 +138,8 @@
 
 		<!-- Bootstrap Color Picker -->
   		<link rel="stylesheet" href="adminlte/colorpicker/bootstrap-colorpicker.min.css">
+		<!-- bootstrap color picker -->
+		<script src="adminlte/colorpicker/bootstrap-colorpicker.min.js"></script>
 
 		<style type="text/css">
 			.select2-container{
@@ -156,145 +159,89 @@
 				display: none !important;
 				pointer-events: none !important;
 			}
-			#add_campaign .modal-dialog {
-				z-index: 200011;
+			#add_campaign .wizard > .content > .body:not(.current) {
+				display: none !important;
+				visibility: hidden !important;
+				pointer-events: none !important;
 			}
-			#add_campaign .wizard > .content > .body {
+			#add_campaign .wizard > .content > .body.current {
 				position: relative !important;
 				float: none !important;
+				pointer-events: auto !important;
+			}
+			#add_campaign .wizard > .actions {
 				display: block !important;
 				visibility: visible !important;
+				padding-bottom: 8px;
+				z-index: 5;
+				position: relative;
 			}
-			#add_campaign .modal-dialog.modal-lg {
-				width: 92%;
-				max-width: 900px;
-				max-height: calc(100vh - 30px);
-				margin: 15px auto;
-			}
-			#add_campaign .modal-content {
-				max-height: calc(100vh - 30px);
-				overflow: hidden;
-				display: flex;
-				flex-direction: column;
-			}
-			#add_campaign .modal-header {
-				flex: 0 0 auto;
+			#add_campaign .wizard > .actions a {
+				pointer-events: auto !important;
 			}
 			#add_campaign .modal-body.wizard-content {
-				flex: 1 1 auto;
-				overflow-x: hidden;
+				max-height: calc(100vh - 180px);
 				overflow-y: auto;
-				max-height: none;
-				min-height: 180px;
 			}
-			#add_campaign #go_campaign_wizard_header_nav,
-			#add_campaign #go_campaign_wizard_footer {
-				flex: 0 0 auto;
-				display: flex !important;
-				flex-wrap: wrap;
-				align-items: center;
-				justify-content: flex-end;
-				gap: 8px;
-				visibility: visible !important;
-				opacity: 1 !important;
-				z-index: 20;
-			}
-			#add_campaign #go_campaign_wizard_header_nav {
-				float: none !important;
-				margin: 4px 48px 0 0;
-				position: relative;
-				z-index: 25;
-				pointer-events: auto;
-			}
-			#add_campaign .modal-header .close {
-				z-index: 30;
-			}
-			#add_campaign .go-campaign-wizard-nav .btn {
-				pointer-events: auto !important;
-				position: relative;
-				z-index: 26;
-			}
-			#add_campaign #go_campaign_wizard_header_nav .btn,
-			#add_campaign #go_campaign_wizard_footer .go-campaign-wizard-nav .btn {
-				min-width: 96px;
-				font-weight: 600;
-				float: none !important;
-			}
-			#add_campaign #go_campaign_wizard_footer {
-				background: #f4f4f4;
-				border-top: 2px solid #3c8dbc;
-				padding: 12px 15px;
-				justify-content: space-between;
-				min-height: 54px;
-			}
-			#add_campaign #go_campaign_wizard_footer .go-campaign-wizard-nav {
-				display: flex !important;
-				flex-wrap: wrap;
-				align-items: center;
-				justify-content: flex-end;
-				gap: 8px;
-				float: none !important;
-				margin: 0;
-			}
-			#add_campaign[data-wizard-step="0"] .go-wizard-prev-btn { display: none !important; }
-			#add_campaign[data-wizard-step="0"] .go-wizard-next-btn { display: inline-block !important; visibility: visible !important; }
-			#add_campaign[data-wizard-step="0"] .go-wizard-finish-btn { display: none !important; }
-			#add_campaign[data-wizard-step="1"] .go-wizard-prev-btn { display: inline-block !important; }
-			#add_campaign[data-wizard-step="1"] .go-wizard-next-btn { display: none !important; }
-			#add_campaign[data-wizard-step="1"] .go-wizard-finish-btn { display: inline-block !important; visibility: visible !important; }
-			#add_campaign #go_campaign_wizard_tabs {
-				margin-bottom: 0;
-			}
-			#add_campaign .go-campaign-wizard-tab-content {
-				padding-top: 12px;
-				min-height: 200px;
-			}
-			#add_campaign .go-campaign-wizard-tab-content > .tab-pane {
-				display: none;
-			}
-			#add_campaign .go-campaign-wizard-tab-content > .tab-pane.active {
-				display: block !important;
-			}
-			#add_campaign[data-wizard-step="0"] #go_campaign_wizard_step_0.active,
-			#add_campaign[data-wizard-step="1"] #go_campaign_wizard_step_1.active {
-				display: block !important;
-			}
-			#add_campaign #go_campaign_wizard_step_1 fieldset {
-				border: 0;
-				padding: 0;
-				margin: 0 0 10px;
-				min-height: 120px;
-			}
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group {
-				clear: both;
-			}
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.dial-method-row,
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.auto-dial-level,
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.auto-dial-level-adv,
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.outbound,
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.blended,
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.survey {
-				min-height: 34px;
-			}
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group:not(.hide) {
-				display: block !important;
-				visibility: visible !important;
-				opacity: 1 !important;
-			}
-			#add_campaign #go_campaign_wizard_step_1 fieldset .form-group.hide {
-				display: none !important;
-			}
-			#add_campaign #go_campaign_wizard_step_1 .form-group:after {
-				content: "";
-				display: table;
-				clear: both;
-			}
-			#add_campaign[data-wizard-step="1"] #go_campaign_wizard_header_nav .go-wizard-next-btn {
-				display: none !important;
+			#add_campaign .wizard > .content {
+				min-height: 220px;
+				overflow: visible;
 			}
 		</style>
+		<script type="text/javascript">
+			function goHideTelephonyFab() {
+				document.querySelectorAll('.bottom-menu').forEach(function (el) {
+					el.setAttribute('data-go-fab-prev-display', el.style.display || '');
+					el.style.display = 'none';
+				});
+			}
+			function goShowTelephonyFab() {
+				document.querySelectorAll('.bottom-menu').forEach(function (el) {
+					var prev = el.getAttribute('data-go-fab-prev-display');
+					el.style.display = prev || '';
+					el.removeAttribute('data-go-fab-prev-display');
+				});
+			}
+			function goShowAddCampaignModal() {
+				var modal = document.getElementById('add_campaign');
+				if (!modal) {
+					alert('Campaign wizard did not load. Refresh the page or check server PHP errors.');
+					return false;
+				}
+				var showModal = function () {
+					goHideTelephonyFab();
+					if (window.jQuery && typeof jQuery.fn.modal === 'function') {
+						jQuery(modal).modal('show');
+					} else {
+						modal.style.display = 'block';
+						modal.classList.add('in');
+						document.body.classList.add('modal-open');
+					}
+				};
+				if (window.jQuery) {
+					showModal();
+				} else {
+					var tries = 0;
+					var timer = window.setInterval(function () {
+						tries++;
+						if (window.jQuery || tries > 40) {
+							window.clearInterval(timer);
+							showModal();
+						}
+					}, 100);
+				}
+				return false;
+			}
+			document.addEventListener('click', function (event) {
+				var trigger = event.target.closest('.btn-add-campaign, [data-go-open-campaign-modal], .fab-div-item[data-target="#add_campaign"]');
+				if (!trigger) {
+					return;
+				}
+				event.preventDefault();
+				goShowAddCampaignModal();
+			}, true);
+		</script>
 		<style type="text/css">
-
 
 			.ui-autocomplete {
 				position: absolute;
@@ -521,7 +468,7 @@
 										   </thead>
 										   <tbody>
 											   	<?php
-													if (!is_null($disposition) && !is_null($disposition->campaign_id) && count($disposition->campaign_id) > 0){
+													if (count($disposition->campaign_id) > 0){
 														for($i=0;$i < count($campaign->campaign_id);$i++){
 															$dispoStatuses = array();
 															foreach ($disposition->custom_dispo as $cCamp => $cDispo){
@@ -690,30 +637,56 @@
 									print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 								}
 							?>
+							<div class="bottom-menu skin-blue <?php if ($perm->campaign->campaign_create == 'N' && $perm->disposition->disposition_create == 'N') { echo "hidden"; } ?>">
+								<div class="action-button-circle">
+									<?php print $ui->getCircleButton("campaigns", "plus"); ?>
+								</div>
+								<div class="fab-div-area" id="fab-div-area">
+									<?php
+									$menu = 4;
+									$menuHeight = '310px';
+									$hideInbound = '';
+									$hideIVR = '';
+									$hideDID = '';
+									$hideCampaign = '';
+									$hideDisposition = '';
+									$hideLeadRecycling = '';
+									$hideAreacode = '';
+									if ($perm->campaign->campaign_create === 'N') {
+										$menu--;
+										$hideCampaign = ' hidden';
+									}
+									if ($perm->disposition->disposition_create === 'N') {
+										$menu--;
+										$hideDisposition = ' hidden';
+									}
+									if ($perm->disposition->disposition_create === 'N') {
+										$menu--;
+										$hideLeadRecycling = ' hidden';
+									}
+									if ($perm->disposition->disposition_create === 'N') {
+										$menu--;
+										$hideAreacode = ' hidden';
+									}
+									if ($menu < 4) { $menuHeight = '240px'; }
+									if ($menu < 3) { $menuHeight = '180px'; }
+									if ($menu < 2) { $menuHeight = '120px'; }
+									?>
+									<ul class="fab-ul" style="height: <?=$menuHeight?>;">
+										<li class="li-style<?=$hideCampaign?>"><a href="#" role="button" class="fa fa-dashboard fab-div-item" data-toggle="modal" data-target="#add_campaign" title="Add Campaign"></a></li><br/>
+										<li class="li-style<?=$hideDisposition?>"><a href="#" role="button" class="fa fa-tty fab-div-item" data-toggle="modal" data-target="#modal_add_disposition" title="Add Disposition"></a></li><br/>
+										<li class="li-style<?=$hideLeadRecycling?>"><a href="#" role="button" class="fa fa-recycle fab-div-item" data-toggle="modal" data-target="#add_leadrecycling" title="Add Lead Recycling"></a></li><br/>
+										<!--<li class="li-style"><a class="fa fa-phone-square fab-div-item" data-toggle="modal" data-target="#add_leadfilter" title="Add Phone Numbers"> </a></li>-->
+										<li class="li-style<?=$hideAreacode?>"><a href="#" role="button" class="fa fa-paper-plane fab-div-item" data-toggle="modal" data-target="#add_areacode" title="Add Areacode"></a></li>
+									</ul>
+								</div>
+							</div>
 						</div><!-- /.body -->
 					</div><!-- /.panel -->
                 </section><!-- /.content -->
             </aside><!-- /.right-side -->
 			<?php print $ui->getRightSidebar($user->getUserId(), $user->getUserName(), $user->getUserAvatar()); ?>
 	</div><!-- ./wrapper -->
-
-
-	<!-- FIXED ACTION BUTTON -->
-	<div class="bottom-menu skin-blue" style="position:fixed !important;bottom:24px !important;right:24px !important;z-index:1030 !important;">
-		<div class="action-button-circle" style="cursor:pointer;">
-			<?php print $ui->getCircleButton("campaigns", "plus"); ?>
-		</div>
-		<div class="fab-div-area" id="fab-div-area" style="position:fixed !important;bottom:90px !important;right:24px !important;z-index:1031 !important;">
-			<ul class="fab-ul" style="height: auto; margin:0; padding:0; list-style:none;">
-				<li class="li-style" style="margin-bottom:10px;"><a class="fa fa-dashboard fab-div-item" data-toggle="modal" data-target="#add_campaign" onclick="$('#add_campaign').modal('show');" title="Add Campaign"></a></li>
-				<li class="li-style" style="margin-bottom:10px;"><a class="fa fa-tty fab-div-item" data-toggle="modal" data-target="#modal_add_disposition" onclick="$('#modal_add_disposition').modal('show');" title="Add Disposition"></a></li>
-				<li class="li-style" style="margin-bottom:10px;"><a class="fa fa-recycle fab-div-item" data-toggle="modal" data-target="#add_leadrecycling" onclick="$('#add_leadrecycling').modal('show');" title="Add Lead Recycling"></a></li>
-				<li class="li-style"><a class="fa fa-paper-plane fab-div-item" data-toggle="modal" data-target="#add_areacode" onclick="$('#add_areacode').modal('show');" title="Add Areacode"></a></li>
-			</ul>
-		</div>
-	</div>
-
-
 
 
 <!-- View Campaign Modal -->
@@ -777,22 +750,17 @@
 <!-- MODAL WIZARDS -->
 
 	<!-- Campaign Modal -->
-		<div id="add_campaign" class="modal fade" role="dialog" data-go-campaign-ui="v4-tabs-6" data-wizard-step="0">
+		<div id="add_campaign" class="modal fade" role="dialog">
 		  <div class="modal-dialog modal-lg">
 		    <!-- Modal content-->
 		    <div class="modal-content">
-		      <div class="modal-header clearfix">
+		      <div class="modal-header">
 
-		        <h4 class="modal-title animated bounceInRight" style="display:inline-block; max-width: calc(100% - 320px);">
+		        <h4 class="modal-title animated bounceInRight">
 		        	<i class="fa fa-info-circle" title="A step by step wizard that allows you to create campaigns."></i>
 		        	<b><?php $lh->translateText("wizard"); ?> » <span class="wizard-type"><?php $lh->translateText("outbound"); ?></span></b>
+							<button type="button" class="close" data-dismiss="modal">&times;</button>
 		       	</h4>
-		        <div id="go_campaign_wizard_header_nav" class="go-campaign-wizard-nav" aria-label="Campaign wizard navigation">
-		          <button type="button" class="btn btn-default btn-sm go-wizard-prev-btn">Previous</button>
-		          <button type="button" class="btn btn-primary btn-sm go-wizard-next-btn">Next</button>
-		          <button type="button" class="btn btn-success btn-sm go-wizard-finish-btn">Finish</button>
-		        </div>
-		        <button type="button" class="close" data-dismiss="modal" style="position:absolute; top:12px; right:15px;">&times;</button>
 		      </div>
 		      <div class="modal-body wizard-content">
 		        <div id="add_campaign_wizard_content">
@@ -800,15 +768,8 @@
 							  <strong><?php $lh->translateText("error"); ?>!</strong> <?php $lh->translateText("campaign_id_already_exist"); ?>
 							</div>
 					<!-- Custom Tabs (Pulled to the right) -->
-					<form id="campaign_form" class="form-horizontal" method="POST" action="./php/AddCampaign.php" enctype="multipart/form-data" novalidate>
-						<div class="go-campaign-wizard-root">
-							<ul class="nav nav-tabs" id="go_campaign_wizard_tabs" role="tablist">
-								<li class="active" role="presentation"><a href="#go_campaign_wizard_step_0" role="tab" data-toggle="tab">1. <?php $lh->translateText("campaign_information"); ?></a></li>
-								<li role="presentation"><a href="#go_campaign_wizard_step_1" role="tab" data-toggle="tab">2. <?php $lh->translateText("additional_information"); ?></a></li>
-							</ul>
-							<div class="tab-content go-campaign-wizard-tab-content">
-							<div role="tabpanel" class="tab-pane active" id="go_campaign_wizard_step_0">
-							<div class="row">
+					<form id="campaign_form" method="POST" action="./php/AddCampaign.php" enctype="multipart/form-data" novalidate>
+						<div class="row">
 							<h4><?php $lh->translateText("campaign_information"); ?>
 	                           <br>
 	                           <small><?php $lh->translateText("campaign_details"); ?></small>
@@ -819,7 +780,7 @@
 				    				<div class="col-lg-8 mb">
 				    					<select id="campaignType" name="campaign_type" class="form-control">
 				    						<option value="outbound"><?php $lh->translateText("outbound"); ?></option>
-				    						<?php if((!empty($gopackage->packagetype) && $gopackage->packagetype !== "gosmall") || (isset($_SESSION['user']) && ($_SESSION['user'] === "goautodial" || $_SESSION['user'] === "goAPI")) ){ ?>
+				    						<?php if(isset($gopackage->packagetype) && ($gopackage->packagetype !== "gosmall" || ($_SESSION['user'] === "goautodial" || $_SESSION['user'] === "goAPI")) ){ ?>
 				    						<option value="inbound"><?php $lh->translateText("inbound"); ?></option>
 				    						<option value="blended"><?php $lh->translateText("blended"); ?></option>
 				    						<option value="survey"><?php $lh->translateText("survey"); ?></option>
@@ -834,7 +795,7 @@
 				    					<div class="input-group">
 									      <input id="campaign-id" name="campaign_id" type="number" class="form-control" placeholder="" value="<?php echo str_pad(mt_rand(1,99999999),8,'0',STR_PAD_LEFT); ?>" min="0" minlength="3" maxlength="8" readonly onkeydown="return FilterInput(event)">
 									      <span class="input-group-btn" style="vertical-align: top;">
-									        <button id="campaign-id-edit-btn" class="btn btn-default" type="button" style="min-height: 34px;" title="Edit campaign ID"><i class="fa fa-pencil"></i></button>
+									        <button id="campaign-id-edit-btn" class="btn btn-default" type="button" style="min-height: 34px;"><i class="fa fa-pencil"></i></button>
 									      </span>
 									    </div><!-- /input-group -->
 				    				</div>
@@ -848,7 +809,7 @@
 				    			<div class="form-group inbound blended hide">
 				    				<label class="control-label col-lg-4"><?php $lh->translateText("did_tfn_extension"); ?>:</label>
 				    				<div class="col-lg-8 mb">
-				    					<input id="did-tfn-extension" name="did_tfn_extension" type="text" class="did-tfn-extension form-control" autocomplete="off">
+				    					<input id="did-tfn-extension" name="did_tfn_extension" type="number" class="did-tfn-extension form-control" required>
 				    				</div>
 				    			</div>
 				    			<div class="form-group inbound blended hide">
@@ -963,17 +924,80 @@
 				    				</div>
 				    			</div>
 				    		</fieldset>
-							</div><!-- row -->
-							</div><!-- tab pane 1 -->
 
 				    		<!-- STEP 2 -->
-							<div role="tabpanel" class="tab-pane" id="go_campaign_wizard_step_1">
-							<div class="row">
 							<h4><?php $lh->translateText("additional_information"); ?>
 	                           <br>
 	                           <small><?php $lh->translateText("assign_then_enter_account"); ?></small>
 	                        </h4>
 	                        <fieldset>
+			    			<!--<div class="form-group">
+			    				<label class="control-label col-lg-4">Lead File:</label>
+			    				<div class="col-lg-8">
+			    					<div class="input-group">
+			    						<input type="file" class="hide" id="lead-file" name="lead_file">
+										<input type="text" class="form-control lead-file-holder" placeholder="Lead File">
+										<span class="input-group-btn">
+											<button class="btn btn-default btn-lead-file" type="button">Browse</button>
+										</span>
+									</div>
+			    				</div>
+			    			</div>
+			    			<div class="form-group">
+			    				<label class="control-label col-lg-4">&nbsp;</label>
+			    				<div class="col-lg-8">
+			    					<button type="button" class="btn btn-default upload-leads">UPLOAD LEADS</button>
+			    					<small class="text-green success hide">&nbsp;&nbsp;&nbsp;Leads successfully uploaded...</small>
+			    					<small class="text-red error hide">&nbsp;&nbsp;&nbsp;Error. Something went wrong...</small>
+			    				</div>
+			    			</div>-->
+			    			<!--<div class="form-group">
+			    				<label class="control-label col-lg-4">List ID:</label>
+			    				<label class="control-label col-lg-8" style="text-align: left;">
+			    					<?php
+			    						$list_id = end($list->list_id) + 1;
+			    						echo $list_id." >> List ".$list_id;
+			    					?>
+			    				</label>
+			    			</div>
+			    			<div class="form-group">
+			    				<label class="control-label col-lg-4">Country:</label>
+			    				<div class="col-lg-8">
+			    					<select id="country" name="country" class="form-control select2">
+			    						<?php if ($country_codes->result=="success") { ?>
+											<?php for($i=0;$i < count($country_codes->country);$i++){ ?>
+												<option value="<?php echo $country_codes->country_code[$i]?>">
+													<?php echo $country_codes->country_code[$i]?> >> <?php echo $country_codes->country[$i]?>
+												</option>
+											<?php } ?>
+										<?php } else { ?>
+											No record found.
+										<?php } ?>
+			    					</select>
+			    				</div>
+			    			</div>
+			    			<div class="form-group">
+			    				<label class="control-label col-lg-4">Check for duplicates:</label>
+			    				<div class="col-lg-8">
+			    					<select id="check-for-duplicates" name="check_for_duplicates" class="form-control">
+			    						<option value="NONE">NO DUPLICATE CHECK</option>
+			    						<option value="CHECKLIST">CHECK FOR DUPLICATES BY PHONE IN LIST ID</option>
+			    						<option value="CHECKCAMP">CHECK FOR DUPLICATES BY PHONE IN ALL CAMPAIGN LISTS</option>
+			    					</select>
+			    				</div>
+			    			</div>-->
+			    			<!-- <div class="form-group">
+			    				<label class="control-label col-lg-4">Upload Leads:</label>
+			    				<div class="col-lg-8">
+									<div class="input-group">
+										<input type="file" class="hide" id="leads" name="leads">
+										<input type="text" class="form-control leads-holder" placeholder="Upload Leads(eg. CSV File)">
+										<span class="input-group-btn">
+											<button class="btn btn-default btn-leads" type="button">Browse</button>
+										</span>
+									</div>
+			    				</div>
+			    			</div> -->
 				    			<div class="form-group dial-method-row">
 				    				<label class="control-label col-lg-5"><?php $lh->translateText("dial_method"); ?>:</label>
 				    				<div class="col-lg-7 mb">
@@ -1060,7 +1084,7 @@
 			    					</select>
 			    				</div>
 			    			</div> -->
-				    			<div class="form-group outbound blended">
+				    			<div class="form-group blended">
 				    				<label class="control-label col-lg-5"><?php $lh->translateText("campaign_recordings"); ?>:</label>
 				    				<div class="col-lg-7 mb">
 				    					<select class="form-control" id="call-recordings" name="campaign_recording">
@@ -1131,21 +1155,9 @@
 				    				</div>
 				    			</div>
 				    		</fieldset><!-- end of step 2 -->
-							</div><!-- row -->
-							</div><!-- tab pane 2 -->
-							</div><!-- tab-content -->
-			    		</div><!-- go-campaign-wizard-root -->
+			    		</div><!-- ./row -->
 	    			</form>
 				</div>
-		      </div>
-		      <div class="modal-footer clearfix" id="go_campaign_wizard_footer">
-		        <button type="button" class="btn btn-default" data-dismiss="modal"><?php $lh->translateText("close"); ?></button>
-		        <div class="go-campaign-wizard-nav" aria-label="Campaign wizard navigation">
-		          <button type="button" class="btn btn-default go-wizard-prev-btn" id="go_wizard_prev">Previous</button>
-		          <button type="button" class="btn btn-primary go-wizard-next-btn" id="go_wizard_next">Next</button>
-		          <button type="button" class="btn btn-success go-wizard-finish-btn" id="go_wizard_finish">Finish</button>
-		          <small class="text-muted" style="margin-left:8px;">v4-tabs-6</small>
-		        </div>
 		      </div>
 		    </div>
 		    <!-- End of modal content -->
@@ -1820,282 +1832,61 @@
 	<!-- End of modal -->
 
 	<?php print $ui->standardizedThemeJS(); ?>
-	<!-- bootstrap color picker -->
-	<script src="adminlte/colorpicker/bootstrap-colorpicker.min.js"></script>
 	<!-- JQUERY STEPS-->
   	<script src="js/dashboard/js/jquery.steps/build/jquery.steps.js"></script>
 	<script type="text/javascript">
 		jQuery(function ($) {
-			if ($.ajaxSetup) {
-				var _jsonConverter = $.ajaxSettings.converters['text json'];
-				$.ajaxSetup({
-					converters: {
-						'text json': function (text) {
-							if (text === undefined || text === null || String(text).trim() === '') {
-								return null;
-							}
-							if (typeof _jsonConverter === 'function') {
-								return _jsonConverter(text);
-							}
-							return window.goSafeJsonParse(text, null);
-						}
-					}
-				});
-			}
-			if (!window.goSafeJsonParse) {
-				window.goSafeJsonParse = function (input, fallback) {
-					if (typeof fallback === 'undefined') {
-						fallback = null;
-					}
-					if (input === undefined || input === null || (typeof input === 'string' && !String(input).trim())) {
-						return fallback;
-					}
-					if (typeof input === 'object') {
-						return input;
-					}
-					try {
-						return JSON.parse(String(input));
-					} catch (e) {
-						return fallback;
-					}
-				};
-			}
-
-			window.goManualStepIndex = 0;
-			window.goCampaignWizardStepTotal = 2;
-
-			window.goResetCampaignWizardNavButtons = function () {
-				window.goManualStepIndex = 0;
-				$('#add_campaign').attr('data-wizard-step', '0');
-			};
-
-			window.goCacheCampaignWizardMarkup = function () {
-				var $form = $('#campaign_form');
-				var $root = $form.children('div').first();
-				if (!$form.length || !$root.length) {
-					return;
-				}
-				if ($form.data('goWizardMarkupVersion') !== 'v4-tabs-6' || !$root.find('#go_campaign_wizard_tabs').length || !$root.find('#go_campaign_wizard_step_1 .dial-method-row').length) {
-					$form.removeData('goWizardMarkup');
-					$form.data('goWizardMarkupVersion', 'v4-tabs-6');
-				}
-				if ($form.data('goWizardMarkup')) {
-					return;
-				}
-				$form.data('goWizardMarkup', $root.prop('outerHTML'));
-			};
-
-			window.goRestoreCampaignWizardMarkup = function () {
-				var $form = $('#campaign_form');
-				var markup = $form.data('goWizardMarkup');
-				if (!$form.length || !markup) {
-					return;
-				}
-				$form.children('div').first().replaceWith(markup);
-				$form.removeData('validator');
-			};
-
-			window.goStripCampaignJquerySteps = function () {
-				var $form = $('#campaign_form');
-				var $root = $form.children('div').first();
-				if ($root.data('state') && $.fn.steps && typeof $root.steps === 'function') {
-					try {
-						$root.steps('destroy');
-					} catch (e) {}
-				}
-				window.goRestoreCampaignWizardMarkup();
-			};
-
-			window.goGetCampaignWizardStepPanels = function ($root) {
-				var $steps = $root.children('fieldset');
-				if ($steps.length >= 2) {
-					return $steps;
-				}
-				$steps = $root.find('.content > .body');
-				if ($steps.length >= 2) {
-					return $steps;
-				}
-				$steps = $root.find('.content > fieldset, .content > .body');
-				if ($steps.length) {
-					return $steps;
-				}
-				return $root.children('fieldset');
-			};
-
-			window.goGetCampaignWizardStepTitles = function ($root) {
-				var $heads = $root.children('h4');
-				if ($heads.length >= 2) {
-					return $heads;
-				}
-				$heads = $root.find('.content > .title');
-				if ($heads.length) {
-					return $heads;
-				}
-				return $root.children('h4');
-			};
-
-			window.goGetCampaignWizardStepCount = function ($root) {
-				var count = window.goGetCampaignWizardStepPanels($root).length;
-				if (count >= 2) {
-					return count;
-				}
-				return window.goCampaignWizardStepTotal;
-			};
-
-			window.goApplyCampaignWizardNav = function (cur, total) {
-				if (!total || total < 1) {
-					total = window.goCampaignWizardStepTotal;
-				}
-				if (cur < 0) {
-					cur = 0;
-				}
-				var last = total - 1;
-				if (cur > last) {
-					cur = last;
-				}
-				window.goManualStepIndex = cur;
-				$('#add_campaign').attr('data-wizard-step', String(cur));
-			};
-
-			window.goManualCampaignWizardSync = function () {
-				var $row = $('#campaign_form').children('div').first();
-				var total = window.goGetCampaignWizardStepCount($row);
-				var i = window.goManualStepIndex;
-				if (i < 0) {
-					i = 0;
-				}
-				if (i >= total) {
-					i = total - 1;
-				}
-				window.goApplyCampaignWizardNav(i, total);
-			};
-
-			window.goPrepareAddCampaignWizard = function () {
-				window.goCacheCampaignWizardMarkup();
-				window.goManualStepIndex = 0;
-				var $form = $('#campaign_form');
-				$form.removeData('validator');
-				if ($.fn.validate) {
-					try {
-						$form.validate({ errorPlacement: function (err, el) { el.after(err); } });
-					} catch (validateErr) {}
-				}
-				window.goResetCampaignWizardNavButtons();
-				if (typeof window.goCampaignWizardSetStep === 'function') {
-					window.goCampaignWizardSetStep(0);
-				} else {
-					window.goManualCampaignWizardSync();
-				}
-				if ($('#campaignType').length) {
-					$('#campaignType').trigger('change');
-				}
-				if (typeof window.goRefreshCampaignWizardStep2Fields === 'function') {
-					window.goRefreshCampaignWizardStep2Fields();
-				} else if ($('#dial-method').length && typeof dialMethod === 'function') {
-					dialMethod($('#dial-method').val());
-				}
-			};
-
-			window.goSyncCampaignWizardFooter = function () {
-				window.goManualCampaignWizardSync();
-			};
-
 			window.goInitCampaignWizard = function () {
-				window.goPrepareAddCampaignWizard();
-				return true;
-			};
-
-			window.goWizardValidateStep = function () {
-				var step = parseInt($('#add_campaign').attr('data-wizard-step') || window.goManualStepIndex || 0, 10);
 				var $form = $('#campaign_form');
-				var $stepPanel = $form.find('.go-campaign-wizard-step[data-step="' + step + '"]');
-
-				if (step === 0) {
-					var name = $.trim($('#campaign-name').val() || '');
-					if (name.length < 6) {
-						alert(name.length === 0
-							? 'Please enter a campaign name (minimum 6 characters, e.g. test01).'
-							: 'Campaign name must be at least 6 characters (for example: test01).');
-						$('#campaign-name').focus();
-						return false;
-					}
+				var $root = $form.children('div').first();
+				if (!$form.length || !$root.length || !$.fn.steps) {
+					return false;
+				}
+				if ($root.hasClass('wizard') || $form.data('goStepsInitialized')) {
 					return true;
 				}
-
-				if ($.fn.validate && $form.data('validator')) {
-					var validator = $form.validate();
-					validator.settings.ignore = ':disabled,:hidden';
-					var valid = true;
-					$stepPanel.find(':input[name]').each(function () {
-						if (!validator.element(this)) {
-							valid = false;
+				try {
+					if ($.fn.validate && !$form.data('validator')) {
+						$form.validate({ errorPlacement: function (err, el) { el.after(err); } });
+					}
+					$root.steps({
+						headerTag: 'h4',
+						bodyTag: 'fieldset',
+						transitionEffect: 'slideLeft',
+						enableAllSteps: true,
+						onStepChanging: function (event, currentIndex, newIndex) {
+							if (currentIndex > newIndex) {
+								return true;
+							}
+							if ($.fn.validate && $form.data('validator')) {
+								$form.validate().settings.ignore = ':disabled,:hidden';
+								return $form.valid();
+							}
+							return true;
+						},
+						onFinishing: function () {
+							if ($.fn.validate && $form.data('validator')) {
+								$form.validate().settings.ignore = ':disabled,:hidden';
+								return $form.valid();
+							}
+							return true;
+						},
+						onFinished: function (event, currentIndex) {
+							if (typeof window.goFinishCampaignWizard === 'function') {
+								window.goFinishCampaignWizard(event, currentIndex);
+							}
 						}
 					});
-					if (!valid) {
-						var $err = $stepPanel.find('label.error:visible, input.error:visible').first();
-						if (!$err.length) {
-							$err = $form.find('label.error:visible, input.error:visible').first();
-						}
-						if ($err.length) {
-							$err[0].scrollIntoView({ block: 'center', behavior: 'smooth' });
-						}
-						return false;
-					}
-				}
-				return true;
-			};
-
-			window.goWizardNext = function () {
-				if (typeof window.goCampaignWizardSetStep === 'function') {
-					window.goCampaignWizardSetStep(1);
+					$form.data('goStepsInitialized', true);
+					return true;
+				} catch (err) {
+					console.error('Campaign wizard init failed:', err);
+					return false;
 				}
 			};
-
-			window.goWizardPrev = function () {
-				if (typeof window.goCampaignWizardSetStep === 'function') {
-					window.goCampaignWizardSetStep(0);
-				}
-			};
-
-			window.goWizardFinish = function () {
-				var name = $.trim($('#campaign-name').val() || '');
-				if (name.length < 6) {
-					alert(name.length === 0
-						? 'Please enter a campaign name (minimum 6 characters, e.g. test01).'
-						: 'Campaign name must be at least 6 characters (for example: test01).');
-					if (typeof window.goCampaignWizardSetStep === 'function') {
-						window.goCampaignWizardSetStep(0);
-					}
-					$('#campaign-name').focus();
-					return;
-				}
-				if (!window.goWizardValidateStep()) {
-					return;
-				}
-				if (typeof window.goFinishCampaignWizard === 'function') {
-					window.goFinishCampaignWizard(null, window.goManualStepIndex || 1);
-				}
-			};
-
-			window.goCacheCampaignWizardMarkup();
-
-			$('#add_campaign').on('hidden.bs.modal', function () {
-				window.goResetCampaignWizardNavButtons();
-				if (typeof window.goCampaignWizardSetStep === 'function') {
-					window.goCampaignWizardSetStep(0);
-				}
-			});
+			window.goInitCampaignWizard();
 			$('#add_campaign').on('shown.bs.modal', function () {
-				window.goPrepareAddCampaignWizard();
-			});
-			$(document).on('shown.bs.tab', '#go_campaign_wizard_tabs a[data-toggle="tab"]', function (e) {
-				var href = $(e.target).attr('href') || '';
-				var step = href.indexOf('_step_1') !== -1 ? 1 : 0;
-				$('#add_campaign').attr('data-wizard-step', String(step));
-				window.goManualStepIndex = step;
-				if (step === 1 && typeof window.goRefreshCampaignWizardStep2Fields === 'function') {
-					window.goRefreshCampaignWizardStep2Fields();
-				}
+				window.goInitCampaignWizard();
 			});
 		});
 	</script>
@@ -2105,14 +1896,6 @@
 	<script src="js/plugins/iCheck/icheck.min.js"></script>
 
 	<script type="text/javascript">
-		// Fallback for Cookies if offline or CDN is blocked
-		if (typeof Cookies === 'undefined') {
-			window.Cookies = {
-				get: function(key) { return null; },
-				set: function(key, val, options) {}
-			};
-		}
-
 		function FilterInput(event) {
 			var keyCode = ('which' in event) ? event.which : event.keyCode;
 
@@ -2224,22 +2007,12 @@
 				$(this).find(".fab-div-area").stop().slideToggle({ height: 'toggle', opacity: 'toggle' }, 'slow');
 			});
 
-			// Explicit Modal Trigger Handlers
-			$(document).on('click', '.btn-add-campaign, [data-target="#add_campaign"], .add-campaign, .add-campaigns', function (e) {
+			$(document).on('click', '.fab-div-item[data-toggle="modal"]', function (e) {
 				e.preventDefault();
-				goShowAddCampaignModal();
-			});
-			$(document).on('click', '[data-target="#modal_add_disposition"], .add-disposition', function (e) {
-				e.preventDefault();
-				$('#modal_add_disposition').modal('show');
-			});
-			$(document).on('click', '[data-target="#add_leadrecycling"], .add-leadrecycling', function (e) {
-				e.preventDefault();
-				$('#add_leadrecycling').modal('show');
-			});
-			$(document).on('click', '[data-target="#add_areacode"], .add-areacode', function (e) {
-				e.preventDefault();
-				$('#add_areacode').modal('show');
+				var target = $(this).attr('data-target');
+				if (target) {
+					$(target).modal('show');
+				}
 			});
 
 			var dial_prefix = $('#dial_prefix').val();
@@ -2248,7 +2021,7 @@
 			$('#dial_prefix').change(function(){
 				dialPrefix($(this).val());
 			});
-			if ($.fn.colorpicker) { $(".colorpicker").colorpicker(); }
+			$(".colorpicker").colorpicker();
 
 			$('#add_campaign').on('hidden.bs.modal', function () {
 				goShowTelephonyFab();
@@ -2263,9 +2036,12 @@
 			});
 
 			$('#add_campaign').on('shown.bs.modal', function () {
-				if ($.fn.colorpicker) { $(".colorpicker").colorpicker(); }
+				$(".colorpicker").colorpicker();
+				if (typeof window.goInitCampaignWizard === 'function') {
+					window.goInitCampaignWizard();
+				}
 				if ($.fn.autocomplete) {
-					$('#did-tfn-extension').autocomplete({
+				$('#did-tfn-extension').autocomplete({
 					//source: "php/searchDID.php",
 					source: function(request,response) {
 						$.ajax({
@@ -2282,24 +2058,23 @@
 										response('');
 										return;
 									}
-									list = window.goSafeJsonParse(data, null);
-									if (!list) {
+									try {
+										list = JSON.parse(data);
+									} catch (e) {
 										response('');
 										return;
 									}
 								}
-								if (list) {
-									response(list);
+								if (list){
+                                    response(list);
 									$('.call-route-mode').removeClass('hide');
 									$('.group-color').removeClass('hide');
-								} else {
+                                } else {
 									response('');
 									$('.call-route-mode').addClass('hide');
 									$('.group-color').addClass('hide');
 								}
-							},
-							error: function () {
-								response('');
+
 							}
 						});
 					},
@@ -2337,7 +2112,7 @@
 						return false;
 					}
 				});
-					$( "#did-tfn-extension" ).autocomplete( "option", "appendTo", "#campaign_form" );
+				$( "#did-tfn-extension" ).autocomplete( "option", "appendTo", "#campaign_form" );
 				}
 
 			//campaign id
@@ -2450,7 +2225,7 @@
 
 				var dataInfo = $(this).attr('data-info');
 				dataInfo = window.atob(dataInfo);
-				dataInfo = window.goSafeJsonParse(dataInfo, {});
+				dataInfo = JSON.parse(dataInfo);
 				//console.log(dataInfo);
 				console.log(dataInfo);
 				$('.lists-id').val(dataInfo.list_id);
@@ -2564,7 +2339,7 @@
 					dataType: 'json',
 					success: function(data) {
 						var JSONString = data;
-						var JSONObject = window.goSafeJsonParse(JSONString, []);
+						var JSONObject = JSON.parse(JSONString);
 						//console.log(JSONObject);
 						var tablePClist = $('#pause_codes_list').DataTable({
 							data: JSONObject,
@@ -2611,7 +2386,7 @@
 					dataType: 'json',
 					success: function(data) {
 						console.log(data);
-						var JSONObject = window.goSafeJsonParse(data, []);
+						var JSONObject = JSON.parse(data);
 						var tableHKlist = $('#hotkeys_list').DataTable({
 							data:JSONObject,
 							destroy:true,
@@ -3092,10 +2867,8 @@
 					var campaign_form = $("#campaign_form");
 					var campaign_id = $('#campaign-id').val();
 					var resultCheck = checkCampaign(campaign_id);
-					var $finishBtn = $('#add_campaign .go-wizard-finish-btn');
 					var restoreCurrentStep = function() {
-						window.goManualStepIndex = currentIndex;
-						window.goManualCampaignWizardSync();
+						campaign_form.children("div").find(".steps li").eq(currentIndex).removeClass("done").addClass("current").attr("aria-selected", "true");
 					};
 					if (resultCheck == 1) {
 						restoreCurrentStep();
@@ -3112,8 +2885,8 @@
 							},
 							function(isConfirm){
 								if (isConfirm) {
-									$finishBtn.text("Loading...");
-									$finishBtn.prop("disabled", true);
+									$('#finish').text("Loading...");
+									$('#finish').attr("disabled", true);
 									$.ajax({
 										url: campaign_form.attr('action'),
 										type: 'POST',
@@ -3142,8 +2915,8 @@
 											sweetAlert("Oops...", "<?php $lh->translateText("something_went_wrong"); ?>.", "error");
 										},
 										complete: function() {
-											$finishBtn.text("Finish");
-											$finishBtn.prop("disabled", false);
+											$('#finish').text("Finish");
+											$('#finish').attr("disabled", false);
 										}
 									});
 								} else {
@@ -3152,12 +2925,14 @@
 							});
 							$('.campaign-checker-message').addClass('hide');
 					} else {
-						window.goManualStepIndex = 0;
-						window.goManualCampaignWizardSync();
+						campaign_form.children("div").steps("previous");
 						$('.campaign-checker-message').removeClass('hide');
 						$('#campaign-id').focus();
 					}
 				};
+				if (typeof window.goInitCampaignWizard === 'function') {
+					window.goInitCampaignWizard();
+				}
 
 				//view campaign
 				$('.view-campaign').click(function(){
@@ -3416,7 +3191,7 @@
 						dataType: 'json',
 						success: function(data) {
 							var JSONString = data;
-							var JSONObject = window.goSafeJsonParse(JSONString, []);
+							var JSONObject = JSON.parse(JSONString);
 							var tableCP = $('#table_campaign_disposition').DataTable({
 								data:JSONObject,
 								destroy:true,
@@ -3566,7 +3341,7 @@
 						dataType: 'json',
 						success: function(data) {
 							var JSONString = data;
-							var JSONObject = window.goSafeJsonParse(JSONString, []);
+							var JSONObject = JSON.parse(JSONString);
 							var tableCP = $('#table_campaign_leadrecycling').DataTable({
 								data:JSONObject,
 								destroy:true,
@@ -4246,16 +4021,11 @@
 								dialMethod("RATIO");
 							}else if(selectedTypeVal == 'outbound'){
 								$('.inbound').addClass('hide');
+								$('.blended').addClass('hide');
 								$('.survey').addClass('hide');
 								$('.copy-from').addClass('hide');
-								$('.blended').addClass('hide');
 								$('.outbound').removeClass('hide');
 								$('.carrier-to-use').removeClass('hide');
-								$('#add_campaign #go_campaign_wizard_step_1 .outbound').removeClass('hide');
-								$('.dial-method-row').removeClass('hide');
-							}
-							if (typeof window.goRefreshCampaignWizardStep2Fields === 'function') {
-								window.goRefreshCampaignWizardStep2Fields();
 							}
 						});
 					$('#no-channels').focusout(function(){
@@ -4493,7 +4263,7 @@
 				},
 				dataType: 'json',
 				success: function(data) {
-					var JSONObject = window.goSafeJsonParse(data, []);
+					var JSONObject = JSON.parse(data);
 					var tablePClist = $('#pause_codes_list').DataTable({
 						data:JSONObject,
 						destroy:true,
@@ -4533,7 +4303,7 @@
 				dataType: 'json',
 				success: function(data) {
 					console.log(data);
-					var JSONObject = window.goSafeJsonParse(data, []);
+					var JSONObject = JSON.parse(data);
 					var tableHKlist = $('#hotkeys_list').DataTable({
 						data:JSONObject,
 						destroy:true,
@@ -4573,7 +4343,7 @@
 				dataType: 'json',
 				success: function(response) {
 					console.log(response);
-					var JSONObject = window.goSafeJsonParse(response.data, []);
+					var JSONObject = JSON.parse(response.data);
 					var tableLists = $('#lists_list').DataTable({
 						data:JSONObject,
 						destroy:true,
@@ -4629,7 +4399,7 @@
 				dataType: 'json',
 				success: function(response) {
 					console.log(response);
-					var JSONObject = window.goSafeJsonParse(response.data, []);
+					var JSONObject = JSON.parse(response.data);
 					var tableLeadsHopper = $('#leads_on_hopper').DataTable({
 						data:JSONObject,
 						destroy:true,
@@ -4707,19 +4477,9 @@
 					campaign_id : campaign_id,
 					status: ''
 				},
-				dataType: 'text',
+				dataType: 'json',
 				success: function(data) {
-					var parsed = 0;
-					if (data !== undefined && data !== null && String(data).trim() !== '') {
-						try {
-							parsed = window.goSafeJsonParse(data, 1);
-						} catch (e) {
-							parsed = 1;
-						}
-					} else {
-						parsed = 1;
-					}
-					if (parsed == 1) {
+					if (data == 1) {
 						status = 1;
 						$('#finish').attr("disabled", false);
 						$( "#campaign_form" ).removeClass("error");

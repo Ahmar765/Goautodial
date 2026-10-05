@@ -1,6 +1,8 @@
 <?php
-//ini_set('display_errors', 1);
-//ini_set('display_startup_errors', 1);
+require_once __DIR__ . '/RequestGuard.php';
+
+//ini_set('display_errors', '0');
+//ini_set('display_errors', '0');
 //error_reporting(E_ALL);
 include_once('smtp_settings.php');
 require_once('DbHandler.php');
@@ -86,12 +88,12 @@ if ($validated == 1) {
 	//Replace the plain text body with one created manually
 	$mail->AltBody = 'This is a message from: '.$fromuserid;
 	
-	//OVERRIDE CONNECTION FAILURE
+	// Validate SMTP certificates against the configured hostname.
 	$mail->SMTPOptions = array(
 	   	'ssl' => array(
-        	'verify_peer' => false,
-	        'verify_peer_name' => false,
-        	'allow_self_signed' => true
+        	'verify_peer' => true,
+	        'verify_peer_name' => true,
+        	'allow_self_signed' => false
     		)
 	);
 	
@@ -103,7 +105,7 @@ if ($validated == 1) {
 		if($touserid_email == "" || $touserid_email == NULL || $external_recipients_filter == NULL || $external_recipients_filter == "")
 			echo "no email account";
 		else
-			echo $mail->ErrorInfo;
+			echo 'Email delivery failed. Check the server logs.';
 	} else {
 		echo "success";
 	}

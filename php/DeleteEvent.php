@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
 	The MIT License (MIT)
 	
@@ -41,7 +43,7 @@ if ($validated == 1) {
 	// check eventid	
 	$taskid = $_POST["eventid"];
 	// delete task
-	$result = $db->deleteEvent($taskid);
+	$result = $db->deleteEvent($taskid, $_SESSION['userid']);
 	// analyze result
 	if ($result === false) {
 		ob_clean(); 

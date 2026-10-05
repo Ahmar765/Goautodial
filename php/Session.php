@@ -24,6 +24,8 @@
 */
 
 namespace creamy;
+require_once __DIR__ . '/RequestGuard.php';
+
 
 
 // Start session if not already started.
@@ -52,33 +54,19 @@ $session_class = new \creamy\SessionHandler();
 // }
 
 $realPath = '';
-$isGoAgentJs = isset($isAgentUI) && preg_match("/GOagentJS/", (string) $isAgentUI);
-if ($isGoAgentJs) {
-	// Stay on same host/scheme; never force https://host/ (breaks XAMPP subfolder installs)
-	$scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? ''));
-	// GOagentJS lives in /…/modules/GOagent → CRM root is three levels up
-	$crmBase = preg_replace('#/modules/GOagent/?$#', '/', $scriptDir);
-	$realPath = rtrim($crmBase, '/') . '/';
+if(isset($isAgentUI)){
+	if (preg_match("/GOagentJS/", $isAgentUI)) {
+		$realPath = "https://" . $_SERVER["HTTP_HOST"] . "/";
+	}
 }
 
-$isAjaxAction = $isGoAgentJs && (
-	isset($_REQUEST['action']) || isset($_REQUEST['module_name'])
-	|| (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
-);
-
-if (!isset($_SESSION["username"]) || !isset($_SESSION["userid"])) {
-	if ($isAjaxAction) {
-		header('Content-Type: application/json; charset=utf-8');
-		http_response_code(401);
-		echo json_encode(array(
-			'result' => 'error',
-			'message' => 'Session expired. Reload the page and log in again.',
-		));
-		exit;
-	}
-	$loginUrl = ($realPath !== '' ? $realPath : '') . 'login.php';
-	header('Location: ' . $loginUrl);
-	exit;
+if (!isset($_SESSION["username"])) {
+	header('Location: /login.php');
+    exit; // Redirecting To Login Page
+}
+if (!isset($_SESSION["userid"])) {
+	header('Location: /login.php');
+    exit; // Redirecting To Login Page
 }
 if (!isset($_SESSION["userrole"])) {
 	$_SESSION["userrole"] = CRM_DEFAULTS_USER_ROLE_GUEST; // no privileged account by default.

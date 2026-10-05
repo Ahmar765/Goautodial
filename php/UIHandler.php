@@ -223,7 +223,7 @@ error_reporting(E_ERROR | E_PARSE);
 
     /** Tables */
 
-    public function generateTableHeaderWithItems($items, $id, $styles = "", $needsTranslation = true, $hideHeading = false, $hideOnMedium = array(), $hideOnLow = array(), $idTbody = null) {
+    public function generateTableHeaderWithItems($items, $id, $styles = "", $needsTranslation = true, $hideHeading = false, $hideOnMedium = array(), $hideOnLow = array(), $idTbody = '') {
 		$theadStyle = $hideHeading ? 'style="display: none!important;"' : '';
 	    $table = "<table id=\"$id\" class=\"table $styles\" width=\"100%\"><thead $theadStyle><tr>";
 	    if (is_array($items)) {
@@ -233,8 +233,8 @@ error_reporting(E_ERROR | E_PARSE);
 		    	}
 			    // class modifiers for hiding classes in medium or low resolutions.
 			    $classModifiers = "class=\"";
-			    if (is_array($hideOnMedium) && in_array($item, $hideOnMedium)) { $classModifiers .= " hide-on-medium "; }
-			    if (is_array($hideOnLow) && in_array($item, $hideOnLow)) { $classModifiers .= " hide-on-low "; }
+			    if (in_array($item, $hideOnMedium)) { $classModifiers .= " hide-on-medium "; }
+			    if (in_array($item, $hideOnLow)) { $classModifiers .= " hide-on-low "; }
 			    $classModifiers .= "\"";
 			    // build header item
 			    $table .= "<th $classModifiers>".($needsTranslation ? $this->lh->translationFor($item) : $item)."</th>";
@@ -428,7 +428,7 @@ error_reporting(E_ERROR | E_PARSE);
 		return $this->formWithContent($id, $hiddenFields.$content, $submit_text, CRM_UI_STYLE_DEFAULT, $messagetag, $action);
 	}
 
-	public function modalFormStructure($modalid, $formid, $title, $subtitle, $body, $footer, $icon = null, $messagetag = CRM_UI_DEFAULT_RESULT_MESSAGE_TAG, $divClass = "") {
+	public function modalFormStructure($modalid, $formid, $title, $subtitle, $body, $footer, $icon = null, $messagetag = CRM_UI_DEFAULT_RESULT_MESSAGE_TAG, $divClass = '') {
 		$iconCode = empty($icon) ? '' : '<i class="fa fa-'.$icon.'"></i> ';
 		$subtitleCode = empty($subtitle) ? '' : '<p>'.$subtitle.'</p>';
 
@@ -521,7 +521,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    return $result;
     }
 
-    public function singleFormGroupWithSelect($label, $id, $name, $options, $selectedOption, $needsTranslation = false, $labelClass = "", $divClass = "", $selectClass = "") {
+    public function singleFormGroupWithSelect($label, $id, $name, $options, $selectedOption, $needsTranslation = false, $labelClass = '', $divClass = '', $selectClass = '') {
 	    $labelCode = empty($label) ? '<div class="'.$divClass.'">' : '<label class="control-label '.$labelClass.'">'.$label.'</label><div class="'.$divClass.'">';
 	    $selectCode = '<div class="form-group">'.$labelCode.'<select id="'.$id.'" name="'.$name.'" class="form-control '.$selectClass.'">';
 	    foreach ($options as $key => $value) {
@@ -532,7 +532,7 @@ error_reporting(E_ERROR | E_PARSE);
 		return $selectCode;
     }
 
-    public function singleFormGroupWithSelectHiddenInput($label, $id, $name, $options, $selectedOption, $needsTranslation = false, $labelClass = "", $divClass = "", $selectClass = "", $hiddeninput = null) {
+    public function singleFormGroupWithSelectHiddenInput($label, $id, $name, $options, $selectedOption, $needsTranslation = false, $labelClass = '', $divClass = '', $selectClass = '', $hiddeninput = '') {
 	    $labelCode = empty($label) ? '<div class="'.$divClass.'">' : '<label class="control-label '.$labelClass.'">'.$label.'</label><div class="'.$divClass.'">';
 	    if (!empty($hiddeninput)) {
 			//foreach ($hiddeninput as $values) {
@@ -620,7 +620,7 @@ error_reporting(E_ERROR | E_PARSE);
 		return '<div class="input-group">'.$content.'</div>';
 	}
 
-	public function singleFormGroupWrapper($content, $label = null, $labelClass = "") {
+	public function singleFormGroupWrapper($content, $label = null, $labelClass = '') {
 		$labelCode = isset($label) ? '<label class="control-label '.$labelClass.'">'.$label.'</label>' : '';
 		return '<div class="form-group">'.$labelCode.$content.'</div>';
 	}
@@ -1172,7 +1172,6 @@ error_reporting(E_ERROR | E_PARSE);
 					    <span class="sr-only">Toggle Dropdown</span>
 		    </button>
 		    <ul class="dropdown-menu" role="menu">
-			<li><a href="./telephonyleads.php?list_id='.$listid.'">View Leads</a></li>
 			<li'.(($perm->list->list_update === 'N' || preg_match("/^(998|999)$/", $listid)) ? ' class="hidden"' : '').'><a class="edit-list" href="#" data-id="'.$listid.'" data-name="'.$listname.'">'.$this->lh->translationFor("modify").'</a></li>
 			<li'.(($perm->customfields->customfields_create === 'N' || preg_match("/^(998|999)$/", $listid)) ? ' class="hidden"' : '').'><a class="copy-custom-fields" href="#" data-id="'.$listid.'" data-name="'.$listname.'">'.$this->lh->translationFor("copy_list_custom_fields").'</a></li>
 			<li'.($perm->list->list_download === 'N' ? ' class="hidden"' : '').'><a class="download-list" href="#" data-id="'.$listid.'" data-name="'.$listname.'">'.$this->lh->translationFor("download").'</a></li>
@@ -1604,12 +1603,7 @@ error_reporting(E_ERROR | E_PARSE);
 	 */
 	public function creamyHeaderLogo() {
 		$customLogo = $this->db->getSettingValueForKey(CRM_SETTING_COMPANY_LOGO);
-		$logo = (!empty($customLogo) ? $customLogo : CRM_DEFAULT_HEADER_LOGO);
-		$basePath = \creamy\CRMUtils::creamyBaseDirectoryPath() . $logo;
-		if (is_file($basePath)) {
-			$logo .= '?v=' . filemtime($basePath);
-		}
-		return $logo;
+		return (!empty($customLogo) ? $customLogo : CRM_DEFAULT_HEADER_LOGO);
 	}
 
 	/**
@@ -2013,13 +2007,8 @@ error_reporting(E_ERROR | E_PARSE);
 		$agent_chat_status = $this->API_getAgentChatActivation(); //agent_chat_status
 		$whatsapp_status = $this->API_getWhatsappActivation(); //whatsapp_status
 		$usergroup = (!isset($usergroup) ? $_SESSION['usergroup'] : $usergroup);
-		$_rawPerms = $this->api->goGetPermissions('sidebar', $usergroup);
-		if (!is_null($_rawPerms) && isset($_rawPerms->data) && isset($_rawPerms->data->permissions)) {
-			$perms = json_decode(stripslashes($_rawPerms->data->permissions));
-		} else {
-			// Fallback: full access defaults when API is unavailable
-			$perms = json_decode('{"dashboard":{"dashboard_display":"Y"},"carriers":{"carriers_read":"R"},"servers":{"servers_read":"R"},"recordings":{"recordings_display":"Y"}}');
-		}
+		$perms = $this->api->goGetPermissions('sidebar', $usergroup);
+		$perms = json_decode(stripslashes($perms->data->permissions));
 
 		$adminArea = "";
 		$telephonyArea = "";
@@ -2052,7 +2041,6 @@ error_reporting(E_ERROR | E_PARSE);
 			$telephonyArea .= $this-> getSidebarItem("./telephonyusers.php", "users", $this->lh->translationFor("users"));
 			$telephonyArea .= $this-> getSidebarItem("./telephonycampaigns.php", "fa fa-dashboard", $this->lh->translationFor("campaigns"));
 			$telephonyArea .= $this-> getSidebarItem("./telephonylist.php", "list", $this->lh->translationFor("lists"));
-			$telephonyArea .= $this-> getSidebarItem("./telephonyleads.php", "users", "Leads");
 			$telephonyArea .= $this-> getSidebarItem("./loadleads.php", "upload", "Upload Leads");
 			$telephonyArea .= $this-> getSidebarItem("./telephonyfilters.php", "filter", $this->lh->translationFor("filters"));
 			$telephonyArea .= $this-> getSidebarItem("./telephonyscripts.php", "comment", $this->lh->translationFor("scripts"));
@@ -2075,10 +2063,10 @@ error_reporting(E_ERROR | E_PARSE);
 				$settings .= $this-> getSidebarItem("./settingsvoicemails.php", "envelope", $this->lh->translationFor("voice_mails"));
 				$settings .= $this-> getSidebarItem("./settingsusergroups.php", "users", $this->lh->translationFor("user_groups"));
 
-				if ((isset($perms->carriers) && isset($perms->carriers->carriers_read) && $perms->carriers->carriers_read == 'R') || $userrole == CRM_DEFAULTS_USER_ROLE_ADMIN)
+				if ($perms->carriers->carriers_read == 'R' || $userrole == CRM_DEFAULTS_USER_ROLE_ADMIN)
 					$settings .= $this-> getSidebarItem("./settingscarriers.php", "signal", $this->lh->translationFor("carriers"));
 
-				if ((isset($perms->servers) && isset($perms->servers->servers_read) && $perms->servers->servers_read == 'R') || $userrole == CRM_DEFAULTS_USER_ROLE_ADMIN)
+				if ($perms->servers->servers_read == 'R' || $userrole == CRM_DEFAULTS_USER_ROLE_ADMIN)
 					$settings .= $this-> getSidebarItem("./settingsservers.php", "server", $this->lh->translationFor("servers"));
 
 				if ($userrole == CRM_DEFAULTS_USER_ROLE_ADMIN)
@@ -2090,7 +2078,7 @@ error_reporting(E_ERROR | E_PARSE);
 			$callreports = '<li class="treeview"><a href="#"><i class="fa fa-bar-chart-o"></i> <span>'.$this->lh->translationFor("call_reports").'</span><i class="fa fa-angle-left pull-right"></i></a><ul class="treeview-menu">';
 			$callreports .= $this-> getSidebarItem("./callreports.php", "bar-chart", $this->lh->translationFor("reports_and_go_analytics"));
 
-			if (isset($perms->recordings) && isset($perms->recordings->recordings_display) && $perms->recordings->recordings_display == 'Y') {
+			if ($perms->recordings->recordings_display == 'Y') {
 				$callreports .= $this-> getSidebarItem("./callrecordings.php", "phone-square", $this->lh->translationFor("call_recordings"));
 			}
 
@@ -2127,7 +2115,7 @@ error_reporting(E_ERROR | E_PARSE);
 		// prefix: structure and home link
 		// old img element : <img src="'.$avatar.'" class="img-circle" alt="User Image" />
 		$avatarElement = $this->getVueAvatar($username, $avatar, 40);
-		$result = '<aside class="main-sidebar sidebar-offcanvas"><section class="sidebar">
+		$result = '<aside class="main-sidebar" sidebar-offcanvas"><section class="sidebar">
 	            <div class="user-panel hidden">
 	                <div class="pull-left image">
 	                    <a href="edituser.php">'.$avatarElement.'</a>
@@ -2140,7 +2128,7 @@ error_reporting(E_ERROR | E_PARSE);
 	            <ul class="sidebar-menu"><li class="header">'.strtoupper($this->lh->translationFor("menu")).'</li>';
 	    // body: home and customer menus
 	    if ($userrole != CRM_DEFAULTS_USER_ROLE_AGENT) {
-			if (!isset($perms->dashboard) || !isset($perms->dashboard->dashboard_display) || $perms->dashboard->dashboard_display === 'Y') {
+			if ($perms->dashboard->dashboard_display === 'Y') {
 				$result .= $this->getSidebarItem("./index.php", "dashboard", $this->lh->translationFor("Dashboard"));
 			}
 	    }
@@ -2200,7 +2188,7 @@ error_reporting(E_ERROR | E_PARSE);
 	 /** Agent Sidebar */
 
         public function getAgentSidebar($userid, $username, $userrole, $avatar, $usergroup = NULL) {
-		$result = '<aside class="main-sidebar sidebar-offcanvas hide"><section class="sidebar">';
+		$result = '<aside class="main-sidebar" sidebar-offcanvas hide"><section class="sidebar">';
 		$result = '';
 		//$result .= $this->getChat();
 		$result .= '</section></aside>';
@@ -3169,7 +3157,7 @@ error_reporting(E_ERROR | E_PARSE);
 	 * @param String $badgeColor	Color for the badge notification bubble (default yellow).
 	 * @return The HTML with the code of the timeline notification item to insert in the timeline list.
 	 */
-	public function timelineItemWithData($title, $content, $date, $url = null, $buttonTitle = "", $icon = "calendar-o", $buttonStyle = CRM_UI_STYLE_DEFAULT, $badgeColor = "yellow") {
+	public function timelineItemWithData($title, $content, $date, $url = null, $buttonTitle = '', $icon = "calendar-o", $buttonStyle = CRM_UI_STYLE_DEFAULT, $badgeColor = "yellow") {
 		// parameters
 		$relativeTime = $this->relativeTime($date, 1);
 		$actionHTML = isset($url) ? $this->timelineItemActionButton($url, $buttonTitle, $buttonStyle) : "";
@@ -3485,7 +3473,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 
@@ -3512,7 +3500,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 
@@ -3536,10 +3524,9 @@ error_reporting(E_ERROR | E_PARSE);
 
 		//$hideOnMedium = array($this->lh->translationFor("user_group"), $this->lh->translationFor("status"));
 		//$hideOnLow = array($this->lh->translationFor("agent_id"), $this->lh->translationFor("user_group"), $this->lh->translationFor("status"));
-		$result = $this->generateTableHeaderWithItems($columns, "T_userslist", "responsive display no-wrap table-bordered table-striped", true, false, array(), array(), 'T_userslist_body');
+		$result = $this->generateTableHeaderWithItems($columns, "T_userslist", "responsive display no-wrap table-bordered table-striped", true, false, '', '', '');
 
 		// iterate through all users
-		if (is_null($output) || empty($output->user_id)) { return $result . '</table>'; }
 		for($i=0;$i<count($output->user_id);$i++) {
 			$user_id = $output->user_id[$i];
 			$user = $output->user[$i];
@@ -3626,7 +3613,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3722,7 +3709,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3747,7 +3734,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3773,7 +3760,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3804,7 +3791,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3812,72 +3799,34 @@ error_reporting(E_ERROR | E_PARSE);
 		return $output;
 	}
 
-	public function getAdminLogsList($userGroup = null) {
-		$logRows = array();
-		$sourceNote = '';
-
+	public function getAdminLogsList() {
+		//$output = $this->API_goGetAdminLogsList($group, $limit);
 		$output = $this->api->API_getAdminLogsList();
-		if (is_object($output) && isset($output->result) && $output->result === 'success' && !empty($output->data)) {
+		if ($output->result=="success") {
+		# Result was OK!
+
+			$columns = array($this->lh->translationFor('user'), $this->lh->translationFor('ip_address'), $this->lh->translationFor('date_and_time'), $this->lh->translationFor('action'), $this->lh->translationFor('details'), $this->lh->translationFor('sql_query'));
+			$result = $this->generateTableHeaderWithItems($columns, "adminlogs_table", "table-bordered table-striped", true, false, '', '', '');
+
 			foreach ($output->data as $log) {
-				$logRows[] = $log;
+				$details = stripslashes($log->details);
+				$db_query = strip_tags($log->db_query);
+				//$details = (strlen($details) > 30) ? substr($details, 0, 30) . "..." : $details;
+				//$db_query2 = (strlen($db_query) > 30) ? substr($db_query, 0, 30) . "..." : $db_query;
+				$result = $result."<tr>
+					<td><span class='hidden-xs'>".$log->name. " ".$log->user."</span><span class='visible-xs'>".$log->user."</span></td>
+					<td><a href='http://www.ip-tracker.org/locator/ip-lookup.php?ip=".$log->ip_address."' target='_new'>".$log->ip_address."</a></td>
+					<td>".$log->event_date."</td>
+					<td>".$log->action."</td>
+					<td title=\"".stripslashes($log->details)."\">".$details."</td>
+					<td title=\""./*stripslashes($log->db_query)*/$db_query."\">".$db_query."</td></tr>";
 			}
+
+			return $result.'</table>';
+
 		} else {
-			$local = $this->db->getGoActionLogs($userGroup, 500);
-			foreach ($local as $row) {
-				$logRows[] = (object) array(
-					'name' => '',
-					'user' => $row['user'] ?? '',
-					'ip_address' => $row['ip_address'] ?? '',
-					'event_date' => $row['event_date'] ?? '',
-					'action' => $row['action'] ?? '',
-					'details' => $row['details'] ?? '',
-					'db_query' => $row['db_query'] ?? '',
-				);
-			}
-			if (!empty($logRows)) {
-				$sourceNote = '<p class="text-muted"><small>'.$this->lh->translationFor('admin_logs').' — local CRM log (goAPI unavailable).</small></p>';
-			}
+			return $output->result;
 		}
-
-		if (empty($logRows)) {
-			$msg = $this->lh->translationFor('no_data');
-			if (!is_object($output) || !isset($output->result)) {
-				$msg .= ' (goAPI not reachable; no entries in go_action_logs yet.)';
-			}
-			return $this->calloutWarningMessage($msg);
-		}
-
-		$columns = array(
-			$this->lh->translationFor('user'),
-			$this->lh->translationFor('ip_address'),
-			$this->lh->translationFor('date_and_time'),
-			$this->lh->translationFor('action'),
-			$this->lh->translationFor('details'),
-			$this->lh->translationFor('sql_query')
-		);
-		$result = $sourceNote.$this->generateTableHeaderWithItems($columns, "adminlogs_table", "table-bordered table-striped", true, false, '', '', '');
-
-		foreach ($logRows as $log) {
-			$details = stripslashes($log->details ?? '');
-			$db_query = strip_tags($log->db_query ?? '');
-			$displayName = trim(($log->name ?? '').' '.($log->user ?? ''));
-			if ($displayName === '') {
-				$displayName = $log->user ?? '';
-			}
-			$userCell = "<span class='hidden-xs'>".htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8')."</span>";
-			$userCell .= "<span class='visible-xs'>".htmlspecialchars($log->user ?? '', ENT_QUOTES, 'UTF-8')."</span>";
-			$ip = htmlspecialchars($log->ip_address ?? '', ENT_QUOTES, 'UTF-8');
-			$result .= '<tr>'
-				.'<td>'.$userCell.'</td>'
-				.'<td><a href="http://www.ip-tracker.org/locator/ip-lookup.php?ip='.$ip.'" target="_blank" rel="noopener">'.$ip.'</a></td>'
-				.'<td>'.htmlspecialchars($log->event_date ?? '', ENT_QUOTES, 'UTF-8').'</td>'
-				.'<td>'.htmlspecialchars($log->action ?? '', ENT_QUOTES, 'UTF-8').'</td>'
-				.'<td class="log-details truncate_td" title="'.htmlspecialchars(stripslashes($log->details ?? ''), ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($details, ENT_QUOTES, 'UTF-8').'</td>'
-				.'<td class="log-query truncate_td" title="'.htmlspecialchars($db_query, ENT_QUOTES, 'UTF-8').'">'.htmlspecialchars($db_query, ENT_QUOTES, 'UTF-8').'</td>'
-				.'</tr>';
-		}
-
-		return $result.'</table>';
 	}
 
 	// Settings > Phone
@@ -3895,7 +3844,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -3964,7 +3913,7 @@ error_reporting(E_ERROR | E_PARSE);
          curl_setopt($ch, CURLOPT_TIMEOUT, 100);
          curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
          curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
          $data = curl_exec($ch);
          curl_close($ch);
          $output = json_decode($data);
@@ -4047,7 +3996,7 @@ error_reporting(E_ERROR | E_PARSE);
 
 	    // this will be the output html
 	    $button = "";
-	    $button .= '<a class="button-area add-'.$page.'">';
+	    $button .= '<a button-area add-'.$page.'">';
 	    $button .= '<div class="circle-button skin-'.$theme.'">';
 	    $button .= '<em class="fa fa-'.$icon.' button-area add-'.$page.'"></em>';
 	    $button .= '</div>';
@@ -4076,7 +4025,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 	    $data = curl_exec($ch);
 	    curl_close($ch);
 	    $output = json_decode($data);
@@ -4192,7 +4141,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 	    $data = curl_exec($ch);
 	    curl_close($ch);
 	    $output = json_decode($data);
@@ -4208,9 +4157,6 @@ error_reporting(E_ERROR | E_PARSE);
 	public function getListAllMusicOnHold($user_group) {
 		//require_once('Session.php');
 		$perm = $this->api->goGetPermissions('moh', $user_group);
-		if (!is_object($perm)) {
-			$perm = (object) array('moh_update' => 'Y', 'moh_delete' => 'Y', 'moh_create' => 'Y', 'moh_read' => 'Y');
-		}
 	    $output = $this->api->API_getAllMusicOnHold();
 
 	    # Result was OK!
@@ -4218,8 +4164,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    $hideOnMedium = array("Random Order", "Group", "Status");
 		$hideOnLow = array( "Random Order", "Group", "Status");
 	    $result = $this->generateTableHeaderWithItems($columns, "music-on-hold_table", "table-bordered table-striped", true, false, $hideOnMedium, $hideOnLow, '');
-		$mohCount = (is_object($output) && isset($output->moh_id) && is_array($output->moh_id)) ? count($output->moh_id) : 0;
-	    for($i=0;$i<$mohCount;$i++) {
+	    for($i=0;$i<count($output->moh_id);$i++) {
 			$action = ($user_group === "ADMIN" || ($user_group !== "ADMIN" && $output->moh_id[$i] !== 'default')) ? $this->getUserActionMenuForMusicOnHold($output->moh_id[$i], $output->moh_name[$i], $perm) : "";
 
 			if ($output->active[$i] == "Y") {
@@ -4285,7 +4230,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 	    $data = curl_exec($ch);
 	    curl_close($ch);
 	    $output = json_decode($data);
@@ -4296,14 +4241,6 @@ error_reporting(E_ERROR | E_PARSE);
 	public function getListAllVoiceFiles($user_group) {
 		//require_once('Session.php');
 		$perm = $this->api->goGetPermissions('voicefiles', $user_group);
-		if (!is_object($perm)) {
-			$perm = (object) array(
-				'voicefiles_play' => 'Y',
-				'voicefiles_upload' => 'Y',
-				'voicefiles_download' => 'Y',
-				'voicefiles_delete' => 'Y',
-			);
-		}
 		$output = $this->api->API_getAllVoiceFiles();
 	    //if ($output->result=="success") {
 	    # Result was OK!
@@ -4314,48 +4251,33 @@ error_reporting(E_ERROR | E_PARSE);
 	    $server_port = getenv("SERVER_PORT");
 		//$web_ip = getenv("SERVER_ADDR");
 		//$web_ip = $_SERVER['SERVER_NAME'];
-		$web_ip = isset($log_ip) ? $log_ip : ($_SERVER['SERVER_NAME'] ?? 'localhost');
+		$web_ip = $log_ip;
 		if (preg_match("/443/",$server_port)) {$HTTPprotocol = 'https://';}
 		else {$HTTPprotocol = 'http://';}
-		$fileCount = (is_object($output) && isset($output->file_name) && is_array($output->file_name)) ? count($output->file_name) : 0;
-		// Prefer local CRM/web sounds URL (works on XAMPP subfolder installs)
-		$scriptName = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/audiofiles.php');
-		$crmBase = rtrim(dirname($scriptName), '/');
-		if ($crmBase === '' || $crmBase === '/') {
-			$crmBase = '';
-		}
-	    for($i=0;$i<$fileCount;$i++) {
-	    $file_link = $crmBase . '/sounds/' . rawurlencode($output->file_name[$i]);
-		// Fallback to /sounds at web root
-		$rootLink = '/sounds/' . rawurlencode($output->file_name[$i]);
-		$docRoot = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
-		$crmSoundsFile = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'sounds' . DIRECTORY_SEPARATOR . $output->file_name[$i];
-		$webSoundsFile = ($docRoot !== '' ? $docRoot . '/sounds/' . $output->file_name[$i] : '');
-		if (is_file($crmSoundsFile)) {
-			$file_link = $crmBase . '/sounds/' . rawurlencode($output->file_name[$i]);
-		} elseif ($webSoundsFile !== '' && is_file($webSoundsFile)) {
-			$file_link = $rootLink;
-		} elseif (!$this->check_url(($HTTPprotocol ?? 'http://') . ($web_ip ?? 'localhost') . $rootLink)) {
-			$file_link = $rootLink;
-		}
+	    for($i=0;$i<count($output->file_name);$i++) {
+	    $file_link = $HTTPprotocol.$web_ip."/sounds/".$output->file_name[$i];
+		 if (!$this->check_url($file_link)) {
+			 $web_host = getenv("SERVER_NAME");
+			 $file_link = "http://".$web_host."/sounds/".$output->file_name[$i];
+		 }
 	    //$file_link = "http://69.46.6.35/sounds/".$output->file_name[$i];
 
 	    $details = "<strong>Filename</strong>: <i>".$output->file_name[$i]."</i><br/>";
-	    $details .= "<strong>Date</strong>: <i>".($output->file_date[$i] ?? '')."</i><br/>";
+	    $details .= "<strong>Date</strong>: <i>".$output->file_date[$i]."</i><br/>";
 
 		$action = $this->getUserActionMenuForVoiceFiles($output->file_name[$i], $details, $perm, $HTTPprotocol, $web_ip);
 
 		$preFix = "<a class='play_voice_file' data-location='".$file_link."' data-details='".$details."'>";
 		$sufFix = "</a>";
-		if (($perm->voicefiles_play ?? 'Y') === 'N') {
+		if ($perm->voicefiles_play === 'N') {
 			$preFix = '';
 			$sufFix = '';
 		}
 
 		$result .= "<tr>
 			<td>{$preFix}".$output->file_name[$i]."{$sufFix}</td>
-			<td class ='hide-on-medium hide-on-low'>".($output->file_date[$i] ?? '')."</td>
-			<td class ='hide-on-medium hide-on-low'>".($output->file_size[$i] ?? '')."</td>
+			<td class ='hide-on-medium hide-on-low'>".$output->file_date[$i]."</td>
+			<td class ='hide-on-medium hide-on-low'>".$output->file_size[$i]."</td>
 			<td nowrap>".$action."</td>
 		    </tr>";
 	    }
@@ -4539,7 +4461,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 	    $data = curl_exec($ch);
 	    curl_close($ch);
 	    $output = json_decode($data);
@@ -4695,7 +4617,7 @@ error_reporting(E_ERROR | E_PARSE);
 	    curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 	    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 	    curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 	    $data = curl_exec($ch);
 	    curl_close($ch);
 	    $output = json_decode($data);
@@ -5051,7 +4973,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5091,7 +5013,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5133,7 +5055,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5172,7 +5094,7 @@ error_reporting(E_ERROR | E_PARSE);
 			 curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			 curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			 $data = curl_exec($ch);
 			 curl_close($ch);
 
@@ -5212,7 +5134,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5251,7 +5173,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5276,7 +5198,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5304,7 +5226,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5332,7 +5254,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5371,7 +5293,7 @@ error_reporting(E_ERROR | E_PARSE);
 			 curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			 curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			 $data = curl_exec($ch);
 			 curl_close($ch);
 
@@ -5413,7 +5335,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5454,7 +5376,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5479,7 +5401,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5504,7 +5426,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5530,7 +5452,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5556,7 +5478,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5577,7 +5499,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5603,7 +5525,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5629,7 +5551,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5654,7 +5576,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5679,7 +5601,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 			$output = json_decode($data);
@@ -5707,7 +5629,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5733,7 +5655,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5760,7 +5682,7 @@ error_reporting(E_ERROR | E_PARSE);
 			curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 			$data = curl_exec($ch);
 			curl_close($ch);
 
@@ -5788,7 +5710,7 @@ error_reporting(E_ERROR | E_PARSE);
 		 curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		 curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		 $data = curl_exec($ch);
 		 curl_close($ch);
 
@@ -5816,7 +5738,7 @@ error_reporting(E_ERROR | E_PARSE);
 		 curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		 curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		 $data = curl_exec($ch);
 		 curl_close($ch);
 
@@ -5875,7 +5797,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -5917,7 +5839,7 @@ error_reporting(E_ERROR | E_PARSE);
          curl_setopt($ch, CURLOPT_TIMEOUT, 100);
          curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
          curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
          $data = curl_exec($ch);
          curl_close($ch);
          $output = json_decode($data);
@@ -5963,7 +5885,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6136,7 +6058,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 
@@ -6168,7 +6090,7 @@ error_reporting(E_ERROR | E_PARSE);
 		 curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		 curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		 curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		 $data = curl_exec($ch);
 		 curl_close($ch);
 		 $output = json_decode($data);
@@ -6176,30 +6098,9 @@ error_reporting(E_ERROR | E_PARSE);
 		 return $output;
 	}
 
-	public function goGetPermissions($type = 'dashboard', $group = null) {
-		$permissions = $this->API_goGetGroupPermission($group);
-		if (!is_null($permissions)) {
-			$types = explode(",", $type);
-			if (count($types) > 1) {
-				foreach ($types as $t) {
-					if (array_key_exists($t, $permissions)) {
-						$return->{$t} = $permissions->{$t};
-					}
-				}
-			} else {
-				if ($type == 'sidebar') {
-					$return = $permissions;
-				} else if (array_key_exists($type, $permissions)) {
-					$return = $permissions->{$type};
-				} else {
-					$return = null;
-				}
-			}
-		} else {
-			$return = null;
-		}
-		return $return;
-	}
+    public function goGetPermissions($type = 'dashboard', $group = null) {
+        return $this->api->goGetPermissions($type);
+    }
 
 	public function API_ListsStatuses($list_id) {
 		$url = gourl."/goLists/goAPI.php"; #URL to GoAutoDial API. (required)
@@ -6215,7 +6116,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 
@@ -6238,7 +6139,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 
@@ -6263,7 +6164,7 @@ error_reporting(E_ERROR | E_PARSE);
          curl_setopt($ch, CURLOPT_TIMEOUT, 100);
          curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
          curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
          $data = curl_exec($ch);
          curl_close($ch);
          $output = json_decode($data);
@@ -6353,7 +6254,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6374,7 +6275,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6414,7 +6315,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6454,7 +6355,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6593,7 +6494,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);
@@ -6618,7 +6519,7 @@ error_reporting(E_ERROR | E_PARSE);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 100);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $postfields);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 		$data = curl_exec($ch);
 		curl_close($ch);
 		$output = json_decode($data);

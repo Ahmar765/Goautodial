@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ViewDisposition.php
  * @brief       Handles custom disposition variables and HTML

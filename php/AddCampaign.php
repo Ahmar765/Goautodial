@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddCampaign.php
  * @brief       Add New Campaign
@@ -100,18 +102,16 @@
 		'uploaded_wav' => $uploaded_wav
 	);
 
-	require_once(__DIR__ . '/GoHttpClient.php');
+	$output = $api->API_addCampaign($postfields);
 
-	if (!\creamy\GoHttpClient::canPost()) {
+	if (!extension_loaded('curl')) {
 		echo json_encode(array(
 			'status' => 0,
 			'result' => 'error',
-			'message' => 'Cannot call goAPIv2: enable PHP cURL in php.ini or set allow_url_fopen=On, then restart Apache from the XAMPP Control Panel.',
+			'message' => 'GOautodial API (goAPIv2) is not reachable from this PHP install. Enable the cURL extension and install the full GOautodial stack to create campaigns.',
 		));
 		exit;
 	}
-
-	$output = $api->API_addCampaign($postfields);
 
 	if (is_object($output) && ($output->result ?? '') == "success") {
 		$response = array(
@@ -120,40 +120,10 @@
 			'message' => 'Success'
 		);
 	} else {
-		$apiMessage = '';
-		if (is_object($output)) {
-			$apiMessage = (string) ($output->message ?? '');
-			if ($apiMessage === '' || $apiMessage === 'error') {
-				$apiMessage = (string) ($output->result ?? '');
-			}
-		}
-		if ($apiMessage === '' || $apiMessage === 'error') {
-			$base = defined('gourl') ? gourl : 'http://localhost/goAPIv2';
-			$probe = \creamy\GoHttpClient::post($base . '/goCampaigns/goAPI.php', array(
-				'goAction' => 'goGetAllCampaigns',
-				'goUser' => defined('goUser') ? goUser : 'goAPI',
-				'goPass' => defined('goPass') ? goPass : '',
-				'responsetype' => 'json',
-				'session_user' => defined('goUser') ? goUser : 'goAPI',
-				'log_user' => defined('goUser') ? goUser : 'goAPI',
-				'log_group' => 'ADMIN',
-				'log_ip' => '127.0.0.1',
-			), 5);
-			$reachable = is_string($probe) && strlen($probe) > 0 && ($probe[0] === '{' || $probe[0] === '[');
-			if ($reachable) {
-				$apiMessage = 'Campaign create failed (goAPIv2 is reachable, but Add Campaign returned no usable result). '
-					. 'Common causes: campaign ID shorter than 8 characters, or incomplete local schema. '
-					. 'Run php/seed_goapi_local.php, then retry with an 8+ character campaign ID.';
-			} else {
-				$apiMessage = 'goAPIv2 is not reachable at ' . $base . '. '
-					. 'Install GOautodial goAPIv2 on this server, or set GO_API_BASE_URL in the project .env file. '
-					. 'Open php/goapi-status.php in the browser for a connection test.';
-			}
-		}
 		$response = array(
 			'status' => 0,
 			'result' => is_object($output) ? ($output->result ?? 'error') : 'error',
-			'message' => $apiMessage
+			'message' => is_object($output) ? ($output->result ?? 'Campaign API request failed') : 'Campaign API request failed'
 		);
 	}
 

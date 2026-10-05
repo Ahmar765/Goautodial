@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifySettingsVoicemail.php
  * @brief       API to handle voicemail variables

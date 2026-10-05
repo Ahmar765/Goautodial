@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getTotalRingingCalls.php
  * @brief       Displays active outbound ringing calls

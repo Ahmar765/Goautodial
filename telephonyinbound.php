@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file        telephonyinbound.php
  * @brief       Manage Inbound, IVR & DID
@@ -41,11 +43,8 @@
 	$perm = $api->goGetPermissions('inbound,ivr,did');
 	$gopackage = $api->API_getGOPackage();
 
-	// Only enforce gosmall lock when package info is actually available from goAPI
-	if (is_object($gopackage) && isset($gopackage->packagetype) && $gopackage->packagetype === "gosmall"
-		&& ($_SESSION['user'] !== "goautodial" && $_SESSION['user'] !== "goAPI")) {
+	if($gopackage->packagetype === "gosmall" && ($_SESSION['user'] !== "goautodial" && $_SESSION !== "goAPI") ){
 		header("location:index.php");
-		exit;
 	}
 ?>
 <html>
@@ -97,79 +96,28 @@
 
 <?php
 	/*
-	 * APIs used — tolerate goAPI offline (null responses)
+	 * APIs used
 	 */
-	$emptyList = (object) array(
-		'group_id' => array(), 'group_name' => array(), 'active' => array(),
-		'queue_priority' => array(), 'call_time_id' => array(),
-		'menu_id' => array(), 'menu_name' => array(), 'menu_prompt' => array(), 'menu_timeout' => array(),
-		'did_pattern' => array(), 'did_description' => array(), 'did_route' => array(), 'did_id' => array(),
-		'user_group' => array(), 'user' => array(), 'campaign_id' => array(), 'campaign_name' => array(),
-		'voicemail_id' => array(), 'fullname' => array(), 'script_id' => array(), 'file_name' => array(),
-		'call_time_id' => array(), 'call_time_name' => array(),
-	);
 
 	$ingroup = $api->API_getAllInGroups();
-	if (!is_object($ingroup) || !isset($ingroup->group_id) || !is_array($ingroup->group_id)) {
-		$ingroup = clone $emptyList;
-	}
 	$ivr = $api->API_getAllIVRs();
-	if (!is_object($ivr) || !isset($ivr->menu_id) || !is_array($ivr->menu_id)) {
-		$ivr = clone $emptyList;
-	}
 	$phonenumber = $api->API_getAllDIDs();
-	if (!is_object($phonenumber) || !isset($phonenumber->did_pattern) || !is_array($phonenumber->did_pattern)) {
-		$phonenumber = clone $emptyList;
-	}
 
+	/*
+	 * APIs for getting lists for the some of the forms
+	 */
 	$users = $api->API_getAllUsers();
-	if (!is_object($users)) { $users = clone $emptyList; }
 	$user_groups = $api->API_getAllUserGroups();
-	if (!is_object($user_groups) || !isset($user_groups->user_group) || !is_array($user_groups->user_group)) {
-		$user_groups = (object) array(
-			'user_group' => array('ADMIN'),
-			'group_name' => array('Administrators'),
-		);
-	}
 	$campaign = $api->API_getAllCampaigns();
-	if (!is_object($campaign) || !isset($campaign->campaign_id)) {
-		$campaign = (object) array('campaign_id' => array('DEVLOCAL'), 'campaign_name' => array('Local Dev Campaign'));
-	}
 	$voicemails = $api->API_getAllVoicemails();
-	if (!is_object($voicemails)) { $voicemails = clone $emptyList; }
 	$phones = $api->API_getAllPhones();
-	if (!is_object($phones)) { $phones = clone $emptyList; }
 	$scripts = $api->API_getAllScripts();
-	if (!is_object($scripts)) { $scripts = clone $emptyList; }
 	$voicefiles = $api->API_getAllVoiceFiles();
-	if (!is_object($voicefiles)) { $voicefiles = clone $emptyList; }
 	$calltimes = $api->API_getAllCalltimes();
-	if (!is_object($calltimes) || !isset($calltimes->call_time_id)) {
-		$calltimes = (object) array('call_time_id' => array('9am-9pm'), 'call_time_name' => array('9am-9pm'));
-	}
 ?>
 			<div class="panel panel-default">
 				<div class="panel-body">
-					<legend>
-						<?php $lh->translateText("inbound"); ?>: <small><?php $lh->translateText("ingroup"); ?>, <?php $lh->translateText("call_menu"); ?>, <?php $lh->translateText('phone_numbers'); ?></small>
-						<span class="pull-right" style="margin-top: -6px;">
-							<?php if (($perm->inbound->inbound_create ?? 'Y') !== 'N') { ?>
-								<button type="button" class="btn btn-primary btn-sm js-open-inbound-modal" data-target="#add_ingroups">
-									<i class="fa fa-plus"></i> Add In-Group
-								</button>
-							<?php } ?>
-							<?php if (($perm->ivr->ivr_create ?? 'Y') !== 'N') { ?>
-								<button type="button" class="btn btn-info btn-sm js-open-inbound-modal" data-target="#add_ivr">
-									<i class="fa fa-plus"></i> Add IVR
-								</button>
-							<?php } ?>
-							<?php if (($perm->did->did_create ?? 'Y') !== 'N') { ?>
-								<button type="button" class="btn btn-success btn-sm js-open-inbound-modal" data-target="#add_phonenumbers">
-									<i class="fa fa-plus"></i> Add DID
-								</button>
-							<?php } ?>
-						</span>
-					</legend>
+					<legend><?php $lh->translateText("inbound"); ?>: <small><?php $lh->translateText("ingroup"); ?>, <?php $lh->translateText("call_menu"); ?>, <?php $lh->translateText('phone_numbers'); ?></small> </legend>
 
 		            <div role="tabpanel">
 						
@@ -234,8 +182,7 @@
 								   </thead>
 								   <tbody>
 									   	<?php
-									   		$ingroupCount = (isset($ingroup->group_id) && is_array($ingroup->group_id)) ? count($ingroup->group_id) : 0;
-									   		for($i=0;$i < $ingroupCount;$i++){
+									   		for($i=0;$i < count($ingroup->group_id);$i++){
 							
 												if($ingroup->active[$i] == "Y"){
 													$ingroup->active[$i] = $lh->translationFor('active');
@@ -277,8 +224,7 @@
 								   </thead>
 								   <tbody>
 									   	<?php
-									   		$ivrCount = (isset($ivr->menu_id) && is_array($ivr->menu_id)) ? count($ivr->menu_id) : 0;
-									   		for($i=0;$i < $ivrCount;$i++){
+									   		for($i=0;$i < count($ivr->menu_id);$i++){
 
 											$action_IVR = $ui->ActionMenuForIVR($ivr->menu_id[$i], $ivr->menu_name[$i], $perm);
 
@@ -313,8 +259,7 @@
 								   </thead>
 								   <tbody>
 									   	<?php
-									   		$didCount = (isset($phonenumber->did_pattern) && is_array($phonenumber->did_pattern)) ? count($phonenumber->did_pattern) : 0;
-									   		for($i=0;$i < $didCount;$i++){
+									   		for($i=0;$i < count($phonenumber->did_pattern);$i++){
 
 									   			if($phonenumber->active[$i] == "Y"){
 													$phonenumber->active[$i] = $lh->translationFor('active');
@@ -356,7 +301,7 @@
 								}
 							?>
 							
-						<div class="bottom-menu skin-blue<?php if (($perm->inbound->inbound_create ?? 'Y') == 'N' && ($perm->ivr->ivr_create ?? 'Y') == 'N' && ($perm->did->did_create ?? 'Y') == 'N') { echo " hidden"; } ?>">
+						<div class="bottom-menu skin-blue<?php if ($perm->inbound->inbound_create == 'N' && $perm->ivr->ivr_create == 'N' && $perm->did->did_create == 'N') { echo " hidden"; } ?>">
 							<div class="action-button-circle" data-toggle="modal">
 								<?php print $ui->getCircleButton("inbound", "plus"); ?>
 							</div>
@@ -367,15 +312,15 @@
 								$hideInbound = '';
 								$hideIVR = '';
 								$hideDID = '';
-								if (($perm->inbound->inbound_create ?? 'Y') === 'N') {
+								if ($perm->inbound->inbound_create === 'N') {
 									$menu--;
 									$hideInbound = ' hidden';
 								}
-								if (($perm->ivr->ivr_create ?? 'Y') === 'N') {
+								if ($perm->ivr->ivr_create === 'N') {
 									$menu--;
 									$hideIVR = ' hidden';
 								}
-								if (($perm->did->did_create ?? 'Y') === 'N') {
+								if ($perm->did->did_create === 'N') {
 									$menu--;
 									$hideDID = ' hidden';
 								}
@@ -462,12 +407,12 @@
 								<div class="col-sm-9 mb">
 									<select id="user_group" class="form-control select2-1" name="user_group" style="width:100%;">
 										<?php
-											for($i=0;$i<(isset($user_groups->user_group) && is_array($user_groups->user_group) ? count($user_groups->user_group) : 0);$i++){
-												if (strtoupper($_SESSION['usergroup'] ?? '') !== 'ADMIN' && strtoupper($user_groups->user_group[$i]) !== strtoupper($_SESSION['usergroup'] ?? '')) {
+											for($i=0;$i<count($user_groups->user_group);$i++){
+												if (strtoupper($_SESSION['usergroup']) !== 'ADMIN' && strtoupper($user_groups->user_group[$i]) !== strtoupper($_SESSION['usergroup'])) {
 													continue;
 												}
 										?>
-											<option value="<?php echo htmlspecialchars($user_groups->user_group[$i]);?>">  <?php echo htmlspecialchars($user_groups->user_group[$i]." - ".$user_groups->group_name[$i]);?>  </option>
+											<option value="<?php echo $user_groups->user_group[$i];?>">  <?php echo $user_groups->user_group[$i]." - ".$user_groups->group_name[$i];?>  </option>
 										<?php
 											}
 										?>
@@ -1119,12 +1064,12 @@
 								<div class="col-sm-8 mb">
 									<select name="user_groups" id="user_groups" class="form-control select2-1" style="width:100%;">
 										<?php
-											for($i=0;$i<(isset($user_groups->user_group) && is_array($user_groups->user_group) ? count($user_groups->user_group) : 0);$i++){
-												if (strtoupper($_SESSION['usergroup'] ?? '') !== 'ADMIN' && strtoupper($user_groups->user_group[$i]) !== strtoupper($_SESSION['usergroup'] ?? '')) {
+											for($i=0;$i<count($user_groups->user_group);$i++){
+												if (strtoupper($_SESSION['usergroup']) !== 'ADMIN' && strtoupper($user_groups->user_group[$i]) !== strtoupper($_SESSION['usergroup'])) {
 													continue;
 												}
 										?>
-											<option value="<?php echo htmlspecialchars($user_groups->user_group[$i]);?>">  <?php echo htmlspecialchars($user_groups->user_group[$i]." - ".$user_groups->group_name[$i]);?>  </option>
+											<option value="<?php echo $user_groups->user_group[$i];?>">  <?php echo $user_groups->user_group[$i]." - ".$user_groups->group_name[$i];?>  </option>
 										<?php
 											}
 										?>
@@ -1315,19 +1260,6 @@
 
  <script type="text/javascript">
 	$(document).ready(function() {
-		// Explicit modal open (works even if data-api binding fails)
-		$(document).on('click', '.js-open-inbound-modal, [data-target="#add_ingroups"], [data-target="#add_ivr"], [data-target="#add_phonenumbers"]', function(e) {
-			var target = $(this).attr('data-target') || $(this).data('target');
-			if (!target) return;
-			e.preventDefault();
-			var $m = $(target);
-			if (!$m.length) {
-				swal('Error', 'Wizard modal ' + target + ' was not found on the page.', 'error');
-				return;
-			}
-			$m.modal('show');
-		});
-
 		if (window.location.href.indexOf("T_ingroup") > -1) {
 			$(".T_ingroup").addClass("active");
 			$(".T_ivr").removeClass("active");
@@ -1427,10 +1359,8 @@
 			/*********
 			** INIT WIZARD
 			*********/
-			try {
 				var ingroup_form = $("#create_ingroup"); // init form wizard 
 
-			    if (ingroup_form.length && typeof ingroup_form.validate === 'function' && typeof $.fn.steps === 'function') {
 			    ingroup_form.validate({
 			        errorPlacement: function errorPlacement(error, element) { element.after(error); }
 			    });
@@ -1493,10 +1423,6 @@
 								});
 			        }
 			    }); // end of wizard
-			    } // end validate/steps available
-			} catch (wizardErr) {
-				console.warn('In-group wizard init skipped', wizardErr);
-			}
 			
 			/*********
 			** EDIT INGROUP

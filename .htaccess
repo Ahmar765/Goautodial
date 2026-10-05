@@ -2,6 +2,11 @@
     RewriteEngine On
     RewriteBase /
 
+    # Keep deployment files, tests, jobs and private directories off the web.
+    RewriteRule ^(?:docs|config|deployment|bin|jobs|skel|scratch|tests|tmp|vendor)(?:/|$) - [F,L,NC]
+    RewriteRule (^|/)\.(?!well-known(?:/|$)) - [F,L]
+    RewriteRule ^(?:uploads|img/avatars)/.*\.(?:php[0-9]*|phtml|phar)(?:/|$) - [F,L,NC]
+
     #'system' can be replaced if you have renamed your system folder.
     RewriteCond %{REQUEST_URI} ^system.*
     RewriteRule ^(.*)$ /index.php/$1 [L]
@@ -24,15 +29,28 @@
 </IfModule>
 
 <FilesMatch "\.(?:conf)$">
-Order allow,deny
-Deny from all
+Require all denied
 </FilesMatch>
 
 <FilesMatch "\.(?:conf)\.(.*)$">
-Order allow,deny
-Deny from all
+Require all denied
 </FilesMatch>
 
 RedirectMatch 404 /\.git|phpmailer
 
 Options -Indexes
+
+<FilesMatch "(?i)(^\.|\.(sql|sh|pl|log|bak|old|zip)$|\.(conf|php)[-~]|_backup\.php$|^(composer\.(json|lock)|Dockerfile|docker-compose\.ya?ml|installed\.txt|README.*)$)">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(install|init_db|setup_xampp_db|update|job-scheduler|Config|goCRMAPISettings)\.php$">
+    Require all denied
+</FilesMatch>
+<FilesMatch "^(APIHandler|ApiClient|Authentication|LegacyPassword|Permissions|RuntimeConfig|Security|RequestGuard|SessionHandler|SessionCipher|DatabaseConnectorFactory|DbHandler|DbInstaller|CRMDefaults|CRMUtils|CreamyUser|UIHandler|LanguageHandler|ImageHandler|MailHandler|MailerBootstrap|ModuleHandler|Updater|CurlCompat|smtp_settings)\.php$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "same-origin"
+</IfModule>

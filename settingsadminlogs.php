@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 /**
  * @file        settingsadminlogs.php
  * @brief       View admin logs
@@ -106,7 +108,7 @@
 
                 <!-- Main content -->
                 <section class="content">
-                <?php if ($user->userHasAdminPermission() || $user->userHasManagerPermission()) { ?>
+                <?php if ($user->userHasAdminPermission()) { ?>
                     <div class="panel panel-default">
                         <div class="panel-body table" id="admin_logs">
                             <legend><?php $lh->translateText("admin_logs"); ?></legend>
@@ -133,9 +135,6 @@
 
 		<script type="text/javascript">
 			$(document).ready(function() {
-				if (!$('#adminlogs_table').length) {
-					return;
-				}
                 $('#adminlogs_table').dataTable({
 					"aoColumnDefs": [{
 						"sClass": "log-details hidden-xs hidden-sm truncate_td",

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getTotalAgentsWaitCalls.php
  * @brief       Displays the total number of ready agents(waiting for calls)

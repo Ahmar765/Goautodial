@@ -33,7 +33,6 @@ require_once('LanguageHandler.php');
 require_once('APIHandler.php');
 require_once('DatabaseConnectorFactory.php');
 require_once('goCRMAPISettings.php');
-require_once('GoHttpClient.php');
 
 /**
  * DbHandler class.
@@ -236,313 +235,40 @@ class DbHandler {
      * @return object an associative array containing the user's data if credentials are valid and login succeed, NULL otherwise.
      */
     public function checkLoginByName($name, $password, $ip_address) {
-		$localFb = defined('CRM_LOGIN_LOCAL_DB_FALLBACK') && CRM_LOGIN_LOCAL_DB_FALLBACK === true;
-
-		$url = gourl."/goUsers/goAPI.php"; #URL to GoAutoDial API. (required)
-		$postfields = array(
-			'goUser' => goUser,
-			'goPass' => goPass,
-			'responsetype' => 'json',
-			'goAction' => 'goUserLogin',
-			'user_name' => $name,
-			'user_pass' => $password,
-			'ip_address' => $ip_address
-		);
-
-		if (!GoHttpClient::canPost()) {
-			if ($localFb) {
-				return $this->checkLoginByNameLocalDb($name, $password);
-			}
-			return NULL;
-		}
-		$data = GoHttpClient::post($url, $postfields, 10);
-		$userobj = ($data !== false && $data !== '') ? json_decode($data) : null;
-
-		// goAPI unreachable or non-JSON → local DB immediately
-		if (!is_object($userobj)) {
-			if ($localFb) {
-				return $this->checkLoginByNameLocalDb($name, $password);
-			}
-			return NULL;
-		}
-
-		if (($userobj->result ?? '') === "success") { // first match valid?
-			//$password_hash = $userobj["password_hash"];
-			//$status = $userobj["status"];
-			$pass_hash = '';
-			$cwd = $_SERVER['DOCUMENT_ROOT'];
-			$password_hash = $userobj->pass;
-			$status = $userobj->active;
-			$user_role = $userobj->user_level;
-			$_SESSION['level'] = $userobj->user_level;
-			$bcrypt = $userobj->bcrypt;
-			$salt = $userobj->salt;
-			$cost = $userobj->cost;
-			$phone_login = $userobj->phone_login;
-			$realm = $userobj->realm;
-			//$ha1_pass = md5("{$phone_login}:{$realm}:{$password}");
-            $ha1_pass = $userobj->ha1;
-			//if ($status == 1) { // user is active
-
-			if ($bcrypt > 0) {
-				//$pass_hash = exec("{$cwd}/bin/bp.pl --pass=$password --salt=$salt --cost=$cost");
-				//$pass_hash = preg_replace("/PHASH: |\n|\r|\t| /",'',$pass_hash);
-                $pass_options = [
-                    'cost' => $cost,
-                    'salt' => base64_encode($salt)
-                ];
-                $pass_hash = password_hash($password, PASSWORD_BCRYPT, $pass_options);
-                $pass_hash = substr($pass_hash, 29, 31);
-			} else {$pass_hash = $password;}
-
-			if ( preg_match("/Y/i", $status) ) {
-				//if (\creamy\PassHash::check_password($password_hash, $password)) {
-				if ($password_hash === $pass_hash) {
-	                // User password is correct. return some interesting fields...
-	                $arr = array();
-					switch ($user_role) {
-						case 9:
-							$user_role = CRM_DEFAULTS_USER_ROLE_ADMIN;
-							break;
-						case 8:
-							$user_role = CRM_DEFAULTS_USER_ROLE_SUPERVISOR;
-							break;
-						case 7:
-							$user_role = CRM_DEFAULTS_USER_ROLE_TEAMLEADER;
-							break;
-						default:
-							$user_role = CRM_DEFAULTS_USER_ROLE_AGENT;
-					}
-			
-					$arr["id"] = $userobj->user_id;
-	                $arr["name"] = $userobj->full_name;
-	                $arr["email"] = $userobj->email;
-	                $arr["phone_login"] = $userobj->phone_login;
-	                $arr["phone_pass"] = $userobj->phone_pass;
-					$arr["ha1"] = $ha1_pass;
-					$arr["realm"] = $realm;
-					$arr["bcrypt"] = $bcrypt;
-					$arr["role"] = $user_role;
-					$arr["avatar"] = $userobj->avatar;
-					$arr["user_group"] = $userobj->user_group;
-					$arr["use_webrtc"] = $userobj->use_webrtc;
-					$arr["password_hash"] = $pass_hash;
-	                
-	                return $arr;
-	            } else {
-	                if ($localFb) {
-						return $this->checkLoginByNameLocalDb($name, $password);
-					}
-	                return NULL;
-	            }
-			} else {
-				if ($localFb) {
-					return $this->checkLoginByNameLocalDb($name, $password);
-				}
-				return NULL;
-			}
-		}
-
-		if ($localFb) {
-			return $this->checkLoginByNameLocalDb($name, $password);
-		}
-		return NULL;
+        return $this->authenticateBackend('user_name', $name, $password, $ip_address);
     }
 
-	/**
-	 * Authenticate using vicidial_users when goAPI is down (local dev).
-	 */
-	private function checkLoginByNameLocalDb($name, $password) {
-		$name = trim((string) $name);
-		$password = (string) $password;
-		if ($name === '' || $password === '') {
-			return NULL;
-		}
-
-		$row = null;
-		if ($this->dbConnectorAsterisk !== null) {
-			$this->dbConnectorAsterisk->where('user', $name);
-			$row = $this->dbConnectorAsterisk->getOne(CRM_USERS_TABLE_NAME_ASTERISK);
-			if (!is_array($row) || empty($row['user'])) {
-				$row = null;
-			}
-		}
-
-		// Direct mysqli fallback if connector missing / query failed
-		if ($row === null) {
-			$host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-			$user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-			$pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-			$port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-			$dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-			$mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-			if (!$mysqli->connect_errno) {
-				$mysqli->set_charset('utf8mb4');
-				$stmt = $mysqli->prepare('SELECT * FROM vicidial_users WHERE user = ? LIMIT 1');
-				if ($stmt) {
-					$stmt->bind_param('s', $name);
-					$stmt->execute();
-					$res = $stmt->get_result();
-					$row = $res ? $res->fetch_assoc() : null;
-					$stmt->close();
-				}
-				$mysqli->close();
-			}
-		}
-
-		if (!is_array($row) || empty($row['user'])) {
-			return NULL;
-		}
-		if (!preg_match('/Y/i', $row['active'] ?? 'N')) {
-			return NULL;
-		}
-
-		$stored = (string) ($row['pass'] ?? '');
-		$passOk = hash_equals($stored, $password);
-		if (!$passOk && !empty($row['pass_hash'])) {
-			$hash = (string) $row['pass_hash'];
-			// pass_hash may be bcrypt, or mistakenly a plain copy of pass from seed
-			if (strpos($hash, '$2') === 0) {
-				$passOk = password_verify($password, $hash);
-			} else {
-				$passOk = hash_equals($hash, $password);
-			}
-		}
-		if (!$passOk) {
-			return NULL;
-		}
-
-		$user_level = (int) ($row['user_level'] ?? 1);
-		switch ($user_level) {
-			case 9:
-				$crm_role = CRM_DEFAULTS_USER_ROLE_ADMIN;
-				break;
-			case 8:
-				$crm_role = CRM_DEFAULTS_USER_ROLE_SUPERVISOR;
-				break;
-			case 7:
-				$crm_role = CRM_DEFAULTS_USER_ROLE_TEAMLEADER;
-				break;
-			default:
-				$crm_role = CRM_DEFAULTS_USER_ROLE_AGENT;
-		}
-
-		$phoneLogin = !empty($row['phone_login']) ? $row['phone_login'] : $row['user'];
-		return array(
-			'id' => $row['user_id'] ?? $row['user'],
-			'name' => !empty($row['full_name']) ? $row['full_name'] : $row['user'],
-			'email' => $row['email'] ?? '',
-			'phone_login' => $phoneLogin,
-			'phone_pass' => $row['phone_pass'] ?? $password,
-			'ha1' => $row['ha1'] ?? '',
-			'realm' => $row['realm'] ?? '',
-			'bcrypt' => $row['bcrypt'] ?? 0,
-			'role' => $crm_role,
-			'avatar' => $row['avatar'] ?? CRM_DEFAULTS_USER_AVATAR,
-			'user_group' => $row['user_group'] ?? 'ADMIN',
-			'use_webrtc' => $row['use_webrtc'] ?? 0,
-			'password_hash' => $stored,
-		);
-	}
-    
-    /**
-     * Checking user login by email
-     * @param String $email User email
-     * @param String $password User login password
-     * @return object an associative array containing the user's data if credentials are valid and login succeed, NULL otherwise.
-     */
     public function checkLoginByEmail($email, $password, $ip_address) {
-        // fetching user by name and password
-        //$this->dbConnector->where("email", $email);
-        //$userobj = $this->dbConnector->getOne(CRM_USERS_TABLE_NAME);
-		// $this->dbConnectorAsterisk->where("email", $email);
-  //       $userobj = $this->dbConnectorAsterisk->getOne(CRM_USERS_TABLE_NAME_ASTERISK);
-
-    	$postfields["goUser"] = goUser; #Username goes here. (required)
-		$postfields["goPass"] = goPass; #Password goes here. (required)
-		$postfields["goAction"] = "goUserLogin"; #action performed by the [[API:Functions]]. (required)
-		$postfields["responsetype"] = responsetype; #json. (required)
-		$postfields["user_email"] = $email;
-		$postfields["user_pass"] = $password;
-		$postfields["ip_address"] = $ip_address;
-
-		$url = gourl . "/goUsers/goAPI.php";
-		if (!GoHttpClient::canPost()) {
-			return NULL;
-		}
-		$data = GoHttpClient::post($url, $postfields, 10);
-		$userobj = ($data !== false && $data !== '') ? json_decode($data) : null;
-
-		if (is_object($userobj) && ($userobj->result ?? '') === 'success') {
-			//$password_hash = $userobj["password_hash"];
-			//$status = $userobj["status"];
-			// $password_hash = $userobj["pass"];
-			// $status = $userobj["user_level"];
-			$pass_hash = '';
-			$cwd = $_SERVER['DOCUMENT_ROOT'];
-			$password_hash = $userobj->pass;
-			$status = $userobj->active;
-			$user_role = $userobj->user_level;
-			$bcrypt = $userobj->bcrypt;
-			$salt = $userobj->salt;
-			$cost = $userobj->cost;
-			//if ($status == 1) { // user is active
-
-			if ($bcrypt > 0) {
-				//$pass_hash = exec("{$cwd}/bin/bp.pl --pass=$password --salt=$salt --cost=$cost");
-				//$pass_hash = preg_replace("/PHASH: |\n|\r|\t| /",'',$pass_hash);
-                $pass_options = [
-                    'cost' => $cost,
-                    'salt' => base64_encode($salt)
-                ];
-                $pass_hash = password_hash($password, PASSWORD_BCRYPT, $pass_options);
-                $pass_hash = substr($pass_hash, 29, 31);				
-			} else {$pass_hash = $password;}
-			
-			$phone_login = $userobj->phone_login;
-			$realm = $userobj->realm;
-			$ha1_pass = $userobj->ha1;
-
-			if (preg_match("/Y/i", $status)) {
-				if ($password_hash === $pass_hash) {
-					switch ($user_role) {
-						case 9:
-							$user_role = CRM_DEFAULTS_USER_ROLE_ADMIN;
-							break;
-						case 8:
-							$user_role = CRM_DEFAULTS_USER_ROLE_SUPERVISOR;
-							break;
-						case 7:
-							$user_role = CRM_DEFAULTS_USER_ROLE_TEAMLEADER;
-							break;
-						default:
-							$user_role = CRM_DEFAULTS_USER_ROLE_AGENT;
-					}
-
-					return array(
-						"id" => $userobj->user_id,
-						"name" => $userobj->full_name,
-						"email" => $userobj->email,
-						"phone_login" => $userobj->phone_login,
-						"phone_pass" => $userobj->phone_pass,
-						"ha1" => $ha1_pass,
-						"realm" => $realm,
-						"bcrypt" => $bcrypt,
-						"role" => $user_role,
-						"avatar" => $userobj->avatar,
-						"user_group" => $userobj->user_group,
-						"use_webrtc" => $userobj->use_webrtc,
-						"password_hash" => $pass_hash,
-					);
-				}
-				return NULL;
-			}
-			return NULL;
-		} else {
-			return NULL;
-		}
+        if (!is_string($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) return null;
+        // goUserLogin expects user_name; resolve the email through the parameterized connector.
+        try {
+            $this->dbConnectorAsterisk->where('email', $email);
+            $rows = $this->dbConnectorAsterisk->get(CRM_USERS_TABLE_NAME_ASTERISK, 2, 'user');
+            if ($this->dbConnectorAsterisk->getLastError() !== '' || !is_array($rows) || count($rows) !== 1) return null;
+            return $this->authenticateBackend('user_name', $rows[0]['user'], $password, $ip_address);
+        } catch (\Throwable $exception) {
+            error_log('GOautodial email authentication lookup failed.');
+            return null;
+        }
     }
-    
+
+    private function authenticateBackend($field, $identity, $password, $ip_address) {
+        require_once __DIR__ . '/ApiClient.php';
+        require_once __DIR__ . '/Authentication.php';
+        if (!is_string($identity) || !is_string($password) || $identity === '' || $password === '') return null;
+        try {
+            $body = \creamy\ApiClient::post(gourl . '/goUsers/goAPI.php', array(
+                'goUser' => RuntimeConfig::required('GO_API_USER'), 'goPass' => RuntimeConfig::required('GO_API_PASSWORD'), 'responsetype' => 'json',
+                'goAction' => 'goUserLogin', $field => $identity, 'user_pass' => $password,
+                'ip_address' => $ip_address
+            ));
+            return \creamy\Authentication::userFromResponse($body, $password, $identity);
+        } catch (\Throwable $exception) {
+            error_log('GOautodial authentication backend unavailable.');
+            return null;
+        }
+    }
+
     /**
 	 * Changes the user password to $password1 (= $password2) if $oldpassword matches current password.
 	 * This function is supposed to be called by a user changing its own password.
@@ -582,7 +308,7 @@ class DbHandler {
                     $oldpassword = $this->encrypt_passwd($oldpassword, $pass_cost, $pass_key);
                 }
                 
-				if ($password_hash == $oldpassword) {
+				if (is_string($password_hash) && hash_equals($password_hash, $oldpassword)) {
 	                // oldpassword is correct, change password.
 	                // $newPasswordHash = \creamy\PassHash::hash($password1);
                     if ($pass_hash_enabled > 0) {
@@ -888,21 +614,6 @@ class DbHandler {
 		} else {
 			return false;
 		}
-	}
-
-	/**
-	 * CRM action logs (go_action_logs) — used when goAPI admin logs are unavailable.
-	 */
-	public function getGoActionLogs($user_group = null, $limit = 500) {
-		if ($this->dbConnector === null) {
-			return array();
-		}
-		if (!empty($user_group) && strtoupper($user_group) !== 'ADMIN') {
-			$this->dbConnector->where('user_group', $user_group);
-		}
-		$this->dbConnector->orderBy('event_date', 'DESC');
-		$rows = $this->dbConnector->get('go_action_logs', (int) $limit);
-		return is_array($rows) ? $rows : array();
 	}
 	##### END ACTION LOGS #####
 	
@@ -1465,7 +1176,7 @@ class DbHandler {
 	 * @param Array $external_recipients 	A valid RFC 2822 recipients set. See http://www.faqs.org/rfcs/rfc2822
 	 * @return boolean 						true if successful, false otherwise
 	 */
-	public function sendMessage($fromuserid, $touserid, $subject, $message, $attachments, $external_recipients = null, $attachmentTag) {
+	public function sendMessage($fromuserid, $touserid, $subject, $message, $attachments, $external_recipients = null, $attachmentTag = '') {
 		// sanity checks
 		if (empty($fromuserid) || empty($touserid)) return false;
 		if (empty($subject)) $subject = "(".$this->lh->translationFor("no_subject").")";
@@ -2043,13 +1754,14 @@ class DbHandler {
 			"alarm" => $alarm,
 			"url" => $url
 		);
-		error_log("Creando evento con datos: ".var_export($data, true));
 		$id = $this->dbConnector->insert(CRM_EVENTS_TABLE_NAME, $data);
 		if ($id) { return $id; } else return 0;
 	}
 
-	public function deleteEvent($eventid) {
+	public function deleteEvent($eventid, $userid) {
+		if (empty($userid)) return false;
 		$this->dbConnector->where("id", $eventid);
+		$this->dbConnector->where("user_id", $userid);
 		return $this->dbConnector->delete(CRM_EVENTS_TABLE_NAME);
 	}
 	//edit event
@@ -2417,15 +2129,10 @@ class DbHandler {
 	}
     
     private function encrypt_passwd($password, $cost, $salt) {
-        $pass_options = [
-            'cost' => $cost,
-            'salt' => base64_encode($salt)
-        ];
-        $pass_hash = password_hash($password, PASSWORD_BCRYPT, $pass_options);
-        $pass_hash = substr($pass_hash, 29, 31);
-        
-        return $pass_hash;
+        require_once __DIR__ . '/LegacyPassword.php';
+        return \creamy\LegacyPassword::hash($password, $cost, $salt);
     }
+
 }
 
 ?>

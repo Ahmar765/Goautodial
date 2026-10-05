@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteDisposition.php
  * @brief       Handles Delete Disposition Requests

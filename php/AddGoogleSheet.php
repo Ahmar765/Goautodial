@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddGoogleSheet.php
  * @brief       Handles Add to Google Sheet Request

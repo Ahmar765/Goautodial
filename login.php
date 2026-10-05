@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		login.php
  * @brief 		login application
@@ -25,13 +27,10 @@
 	error_reporting(E_ERROR | E_PARSE);
 
 	require_once('./php/CRMDefaults.php');
-	require_once('./php/Config.php');
 	require_once('./php/UIHandler.php');
 	require_once('./php/DbHandler.php');
 	require_once('./php/LanguageHandler.php');
 	require_once('./php/SessionHandler.php');
-	require_once('./php/goCRMAPISettings.php');
-	require_once('./php/GoHttpClient.php');
 	$session_class = new \creamy\SessionHandler();		
 	
 	// force https protocol — disabled for local dev
@@ -51,16 +50,15 @@
 	$ui = \creamy\UIHandler::getInstance();
 	$error = ''; // Variable To Store Error Message
 	if (isset($_POST['submit'])) {
-		if (empty($_POST['username']) || empty($_POST['password'])) {
+		if (!is_string($_POST['username'] ?? null) || !is_string($_POST['password'] ?? null) || $_POST['username'] === '' || $_POST['password'] === '' || strlen($_POST['password']) > 1024) {
 			$error = $lh->translationFor("insert_valid_login_password");
 		} else {
 			$db = new \creamy\DbHandler();
 
-			// Define $username and $password — do NOT SQL-escape password (breaks local DB compare)
-			$username = trim((string) $_POST['username']);
-			$password = (string) $_POST['password'];
-			$username = stripslashes($username);
-
+			// Define $username and $password
+			$username=$_POST['username'];
+			$password=$_POST['password'];
+			
 			// Check password and redirect accordingly
 			$result = null;
 			if(filter_var($username, FILTER_VALIDATE_EMAIL)) {
@@ -71,58 +69,14 @@
 		        // not an email. User name?
 				$result = $db->checkLoginByName($username, $password, $_SERVER['REMOTE_ADDR']);
 		    }
-			if ($result == NULL && defined('CRM_LOGIN_OFFLINE_FALLBACK') && CRM_LOGIN_OFFLINE_FALLBACK === true) {
-				// Dev-only: UI without goAPI (never enable on production)
-				$result = array(
-					"id" => "1",
-					"name" => $username,
-					"role" => CRM_DEFAULTS_USER_ROLE_ADMIN,
-					"user_group" => "ADMIN",
-					"phone_login" => "1000",
-					"phone_pass" => "1000",
-					"ha1" => "",
-					"realm" => "",
-					"bcrypt" => "",
-					"use_webrtc" => "0",
-					"password_hash" => "",
-					"avatar" => CRM_DEFAULTS_USER_AVATAR
-				);
-			}
 
 			if ($result == NULL) { // login failed
-				$localFb = defined('CRM_LOGIN_LOCAL_DB_FALLBACK') && CRM_LOGIN_LOCAL_DB_FALLBACK === true;
-				if (!\creamy\GoHttpClient::canPost()) {
-					$error = $localFb
-						? $lh->translationFor("invalid_login_password") . ' (local login). Try goadmin / admin123 after running php/seed_login_users.php.'
-						: 'Login requires HTTP (enable PHP cURL or allow_url_fopen).';
-				} else {
-					$probe = \creamy\GoHttpClient::post(
-						gourl . '/goUsers/goAPI.php',
-						array(
-							'goAction' => 'goUserLogin',
-							'goUser' => goUser,
-							'goPass' => goPass,
-							'responsetype' => 'json',
-							'user_name' => $username,
-							'user_pass' => $password,
-							'ip_address' => $_SERVER['REMOTE_ADDR'],
-						),
-						5
-					);
-					if ($probe === false || trim((string) $probe) === '') {
-						// goAPI down — if local fallback is on, credentials were wrong / users not seeded
-						if ($localFb) {
-							$error = $lh->translationFor("invalid_login_password")
-								. ' Local login is enabled but user was not found. Use goadmin / admin123 (or agent1 / agent123), or run php/seed_login_users.php.';
-						} else {
-							$error = 'Cannot reach GOautodial login API at ' . gourl . '. Install goAPIv2 or set GO_API_BASE_URL in .env, or set CRM_LOGIN_LOCAL_DB_FALLBACK=true.';
-						}
-					} else {
-						$error = $lh->translationFor("invalid_login_password");
-					}
-				}
+				$error = $lh->translationFor("invalid_login_password");
 			} else {
-				$_SESSION["user"] = $username;
+				if (!session_regenerate_id(true)) { \creamy\Security::deny(503, "Session could not be renewed."); }
+				$_SESSION = array("csrf_token" => bin2hex(random_bytes(32)));
+				$_SESSION["user"] = $result["user"];
+				$_SESSION["level"] = $result["level"];
 				$_SESSION["userid"] = $result["id"];
 				$_SESSION["username"] = $result["name"];
 				$_SESSION["userrole"] = $result["role"];
@@ -142,19 +96,22 @@
 					$_SESSION["avatar"] = CRM_DEFAULTS_USER_AVATAR;
 				}
 
-				if ($_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_AGENT) {
-					header("location: agent.php");
-					exit;
+				if (!session_write_close() || !\creamy\SessionHandler::lastWriteSucceeded()) { \creamy\Security::deny(503, "Session could not be saved."); }
+				if($_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_ADMIN || $_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_SUPERVISOR || $_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_TEAMLEADER){
+					header("location: index.php");
+                    exit; // Redirecting To Admin Dashboard
 				}
-				header("location: index.php");
-				exit;
+				if($_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_AGENT){
+					header("location: agent.php");
+                    exit; // Redirecting to Agent Dashboard
+				}
 
 			}
 		}
 	}
 	
-	$uname = (isset($_GET['username'])) ? $_GET['username'] : '';
-	$upass = (isset($_GET['password'])) ? $_GET['password'] : '';
+	$uname = is_string($_GET['username'] ?? null) ? $_GET['username'] : '';
+	$upass = '';
 	//https://github.com/goautodial/v4.0/issues/48
 	//prevent xss
 	$uname = htmlentities($uname);

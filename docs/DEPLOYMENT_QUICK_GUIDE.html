@@ -1,0 +1,99 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GOautodial Linux Setup Guide</title><style>
+*{box-sizing:border-box}body{margin:0;background:#e9edf1;color:#17212a;font:10.5pt/1.4 Arial,Helvetica,sans-serif}.page{position:relative;width:210mm;min-height:297mm;margin:20px auto;padding:16mm 17mm 19mm;background:white;box-shadow:0 2px 12px #0001}.eyebrow{font-size:9pt;letter-spacing:.6px;text-transform:uppercase;color:#596977;margin-bottom:8pt}h1{font-size:24pt;line-height:1.15;color:#000;margin:0 0 5pt}.subtitle{font-size:9.5pt;color:#596977;margin:0 0 15pt}h2{font-size:17pt;line-height:1.2;color:#000;margin:0 0 12pt}h3{font-size:11.5pt;color:#000;margin:13pt 0 5pt}p{margin:5pt 0 8pt}ul,ol{padding-left:18pt;margin:5pt 0 10pt}li{margin:4pt 0;padding-left:2pt}code{font:8.6pt/1.4 Consolas,"Courier New",monospace;overflow-wrap:anywhere}p code,li code,td code{background:#f1f4f7;padding:1px 2px}pre{font-size:8.5pt;background:#f2f5f7;border:1px solid #d9e0e6;padding:9pt 11pt;margin:7pt 0 10pt;white-space:pre-wrap;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%;font-size:9.2pt;line-height:1.35;margin:8pt 0 11pt}td,th{border:1px solid #d9d9d9;padding:6pt 8pt;text-align:left;vertical-align:middle}th{background:#dce8f2;color:#000}tbody tr:nth-child(even){background:#f7f9fb}td:first-child{width:30%}a{color:#17527e;text-underline-offset:2px}footer{position:absolute;left:17mm;right:17mm;bottom:10mm;font-size:8pt;color:#697986}footer span{float:right}.toolbar{text-align:center;padding:16px 0 0;font-size:13px}.toolbar button{padding:8px 16px;border:1px solid #c0cad3;border-radius:4px;background:white;cursor:pointer}
+@media print{@page{size:A4;margin:0}body{background:white}.page{margin:0;box-shadow:none;break-after:page}.page:last-child{break-after:auto}.toolbar{display:none}h2,h3{break-after:avoid}tr,pre{break-inside:avoid}}
+@media screen and (max-width:820px){.page{width:calc(100% - 20px);padding:24px 22px 48px;min-height:auto}footer{left:22px;right:22px;bottom:14px}}
+</style></head><body><div class="toolbar"><button onclick="window.print()">Print or save as PDF</button> Choose A4 and turn off browser headers and footers.</div><section class="page"><div class="eyebrow">GOautodial Linux setup</div><h1>Deployment setup guide</h1><p class="subtitle">Web application and Linux calling backend</p><h2>Prepare the server and upload the application</h2><h3>1 Prepare the deployment details</h3>
+<p>Use an Ubuntu 24.04 server for the web application and a compatible GOautodial Linux server for calling services. Prepare SSH access, the application domain, backend API domain, SIP domain, database credentials, and the matching backend installation package and SQL schemas.</p>
+<p>Examples below use <code>crm.example.com</code>, <code>dialer.example.com</code>, and <code>/srv/goautodial/current</code>. Replace them with your deployment values. Point the domains&#x27; DNS records to their respective servers.</p>
+<h3>2 Install the web server and PHP</h3>
+<p>Run on the Ubuntu web server:</p>
+<pre><code>sudo apt update
+sudo apt install -y apache2 mariadb-client composer certbot \
+  python3-certbot-apache php8.3-fpm php8.3-cli \
+  php8.3-mysql php8.3-curl php8.3-gd php8.3-mbstring \
+  php8.3-intl php8.3-xml php8.3-zip php8.3-opcache php8.3-bcmath
+sudo a2enmod rewrite ssl headers proxy_fcgi setenvif
+sudo a2enconf php8.3-fpm</code></pre>
+<p>Install PHP IMAP separately if the selected email features require it.</p>
+<h3>3 Upload the project and install dependencies</h3>
+<p>Upload the project to <code>/tmp/goautodial-source</code> using SFTP or SCP. Then run as the deployment user:</p>
+<pre><code>sudo install -d -o &quot;$(id -un)&quot; -g &quot;$(id -gn)&quot; /srv/goautodial/releases/release-001
+rsync -a --exclude=&#x27;.git/&#x27; --exclude=&#x27;.env*&#x27; \
+  --exclude=&#x27;tmp/&#x27; --exclude=&#x27;vendor/&#x27; \
+  --exclude=&#x27;uploads/&#x27; --exclude=&#x27;img/avatars/&#x27; \
+  /tmp/goautodial-source/ /srv/goautodial/releases/release-001/
+cd /srv/goautodial/releases/release-001
+composer install --no-dev --optimize-autoloader</code></pre>
+<p>Keep the Composer lockfile with the release.</p>
+<h3>4 Set permissions and shared storage</h3>
+<p>For the first deployment, create shared storage and copy avatar defaults and upload rules:</p>
+<pre><code>sudo install -d -o www-data -g www-data -m 0750 \
+  /srv/goautodial/shared/uploads /srv/goautodial/shared/avatars
+sudo cp /tmp/goautodial-source/uploads/.htaccess /srv/goautodial/shared/uploads/
+sudo cp -a /tmp/goautodial-source/img/avatars/. /srv/goautodial/shared/avatars/
+sudo chown -R root:www-data /srv/goautodial/releases/release-001
+sudo find /srv/goautodial/releases/release-001 -type d -exec chmod 0750 {} +
+sudo find /srv/goautodial/releases/release-001 -type f -exec chmod 0640 {} +
+sudo chown -R www-data:www-data /srv/goautodial/shared
+sudo ln -s /srv/goautodial/shared/uploads uploads
+sudo ln -s /srv/goautodial/shared/avatars img/avatars
+sudo ln -s /srv/goautodial/releases/release-001 /srv/goautodial/current</code></pre><footer>GOautodial setup guide <span>1 / 3</span></footer></section><section class="page"><div class="eyebrow">GOautodial Linux setup</div><h2>Configure the application and HTTPS</h2><h3>1 Create the production configuration</h3>
+<p>From the release directory, copy the configuration template outside the application:</p>
+<pre><code>sudo install -d -o root -g www-data -m 0750 /etc/goautodial
+sudo cp config/production.php.example /etc/goautodial/production.php
+sudo nano /etc/goautodial/production.php</code></pre>
+<p>Fill these settings in the returned PHP array:</p>
+<table><thead><tr><th>Settings</th><th>Value to supply</th></tr></thead><tbody>
+<tr><td><code>APP_ENV</code>, <code>APP_URL</code></td><td><code>production</code> and <code>https://crm.example.com</code></td></tr>
+<tr><td><code>GO_API_URL</code>, <code>GO_API_USER</code>, <code>GO_API_PASSWORD</code></td><td>HTTPS goAPIv2 URL and backend API account credentials</td></tr>
+<tr><td>GOautodial, Asterisk and Kamailio <code>DB_*</code> settings</td><td>Private hosts, ports, schema names and account credentials</td></tr>
+<tr><td><code>SESSION_DRIVER</code>, <code>SESSION_ENCRYPTION_KEY</code></td><td><code>database</code> and a 64-character hexadecimal key</td></tr>
+<tr><td>SIP, SMTP and integration settings</td><td>Values required by enabled features</td></tr>
+</tbody></table>
+<p>Generate the session key and paste its output into <code>SESSION_ENCRYPTION_KEY</code>:</p>
+<pre><code>php -r &#x27;echo bin2hex(random_bytes(32)), PHP_EOL;&#x27;
+sudo chown root:www-data /etc/goautodial/production.php
+sudo chmod 0640 /etc/goautodial/production.php</code></pre>
+<h3>2 Connect PHP FPM to the configuration</h3>
+<p>Add this line inside the <code>[www]</code> pool in <code>/etc/php/8.3/fpm/pool.d/www.conf</code>:</p>
+<pre><code>env[GOAUTODIAL_CONFIG_FILE] = /etc/goautodial/production.php</code></pre>
+<p>Use <code>deployment/php-production.ini</code> as the application&#x27;s PHP settings reference.</p>
+<h3>3 Configure Apache and HTTPS</h3>
+<p>Create <code>/etc/apache2/sites-available/goautodial.conf</code>:</p>
+<pre><code>&lt;VirtualHost *:80&gt;
+    ServerName crm.example.com
+    DocumentRoot /srv/goautodial/current
+    &lt;Directory /srv/goautodial/current&gt;
+        Options FollowSymLinks
+        AllowOverride All
+        Require all granted
+    &lt;/Directory&gt;
+    ErrorLog ${APACHE_LOG_DIR}/goautodial-error.log
+    CustomLog ${APACHE_LOG_DIR}/goautodial-access.log combined
+&lt;/VirtualHost&gt;</code></pre>
+<p>Enable the site and activate HTTPS:</p>
+<pre><code>sudo a2ensite goautodial.conf
+sudo apache2ctl configtest
+sudo systemctl restart php8.3-fpm apache2
+sudo certbot --apache -d crm.example.com --redirect
+sudo certbot renew --dry-run</code></pre>
+<p>Allow ports 80/443 and administrator SSH access. Keep database connections private. Serve at the domain root. For a TLS reverse proxy, preserve Host, forward <code>X-Forwarded-Proto: https</code>, and set its exact source IP in <code>TRUSTED_PROXIES</code>.</p><footer>GOautodial setup guide <span>2 / 3</span></footer></section><section class="page"><div class="eyebrow">GOautodial Linux setup</div><h2>Set up the calling backend and start the application</h2><h3>1 Install the Linux calling backend</h3>
+<p>On the calling server, install the compatible GOautodial backend package with VICIdial/astguiclient, Asterisk, Kamailio and RTPengine. Use the installation procedure and service definitions supplied with that package.</p>
+<p>Install the matching goAPIv2 release on the backend web server and enable HTTPS at the configured <code>GO_API_URL</code>. Configure its <code>astguiclient.conf</code> with database connections, server IP, directories and installed Asterisk version. Keep this configuration inaccessible over HTTP.</p>
+<h3>2 Import databases and configure accounts</h3>
+<p>Import the matching schemas into <code>goautodial</code>, <code>asterisk</code> and <code>kamailio</code> using the database administrator account. For each supplied schema file:</p>
+<pre><code>mysql -h DATABASE_HOST -u DATABASE_ADMIN -p DATABASE_NAME &lt; SCHEMA_FILE.sql</code></pre>
+<p>Create the application&#x27;s database accounts and grant access to their respective schemas. Ensure the GOautodial schema contains <code>go_sessions</code>; use <code>create_sessions.sql</code> when that table needs creating.</p>
+<p>In the backend administration panel, configure the server, SIP trunk, DIDs, phones, user groups, campaigns, administrator and agent accounts. Match the API account/password format to <code>GO_API_USER</code> and <code>GO_API_PASSWORD</code>. Set the application base URL, timezone and enabled SMTP settings.</p>
+<h3>3 Configure browser calling</h3>
+<p>Configure the SIP WebSocket listener with a trusted certificate and set its hostname/port in the agent/server settings. Configure public/private IP mappings, RTPengine and the backend&#x27;s signaling/media ports. Set <code>SIP_DOMAIN</code>, <code>SIP_WS_HOST</code> and <code>SIP_WS_PORT</code> when using <code>modules/GOagent/jsSIP.php</code>. Configure TURN when agents&#x27; networks require a media relay.</p>
+<h3>4 Enable scheduled jobs</h3>
+<p>Create <code>/etc/cron.d/goautodial-crm</code> with:</p>
+<pre><code>GOAUTODIAL_CONFIG_FILE=/etc/goautodial/production.php
+0 * * * * www-data cd /srv/goautodial/current &amp;&amp; /usr/bin/flock -n /tmp/goautodial-crm.lock /usr/bin/php job-scheduler.php &gt;&gt; /var/log/goautodial-crm.log 2&gt;&amp;1</code></pre>
+<p>Create the log file with ownership allowing <code>www-data</code> to append. Enable the separate VICIdial cron/keepalive processes and configure the backend&#x27;s telephony services to start on boot.</p>
+<h3>5 Start the application</h3>
+<p>Run the connection checks as the application service user:</p>
+<pre><code>cd /srv/goautodial/current
+sudo -u www-data env GOAUTODIAL_CONFIG_FILE=/etc/goautodial/production.php php bin/preflight.php</code></pre>
+<p>Open <code>https://crm.example.com</code>, sign in as an administrator and an agent, and confirm registration, inbound/outbound calls, two-way audio, transfer, dispositions, recordings and reports. Confirm enabled email features. Configure scheduled backups for databases, recordings, shared uploads and protected configuration, then open access to the intended users.</p><footer>GOautodial setup guide <span>3 / 3</span></footer></section></body></html>

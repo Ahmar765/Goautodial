@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteCalltime.php
  * @brief       Handles Delete Calltime Requests

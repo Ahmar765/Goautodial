@@ -1,13 +1,24 @@
 <?php
-$display_name = $_REQUEST['display_name'];
-$phone_login = $_REQUEST['phone_login'];
-$phone_pass = $_REQUEST['phone_this'];
-$websocketSIP = $_REQUEST['wsSIP'];
-$websocketURL = $_REQUEST['wsURL'];
-$websocketPORT = $_REQUEST['wsPort'];
+require_once __DIR__ . '/../../php/RequestGuard.php';
+
+$display_name = $_SESSION['username'];
+$phone_login = $_SESSION['phone_login'];
+$phone_pass = $_SESSION['phone_pass'] ?: ($_SESSION['password_hash'] ?? $_SESSION['phone_this']);
+$websocketSIP = \creamy\RuntimeConfig::required('SIP_DOMAIN');
+$websocketURL = \creamy\RuntimeConfig::required('SIP_WS_HOST');
+$websocketPORT = \creamy\RuntimeConfig::value('SIP_WS_PORT', '8089');
+if (!is_string($websocketSIP) || !is_string($websocketURL)
+    || !preg_match('/^[A-Za-z0-9.-]+$/', $websocketSIP)
+    || !preg_match('/^[A-Za-z0-9.-]+$/', $websocketURL)
+    || !is_scalar($websocketPORT) || !ctype_digit((string) $websocketPORT)
+    || (int) $websocketPORT < 1 || (int) $websocketPORT > 65535) {
+    \creamy\Security::deny(400, 'Invalid SIP WebSocket configuration.');
+}
+$registrarServer = $websocketSIP;
 $websocketSIP = "sip:{$phone_login}@{$websocketSIP}";
 $websocketURI = "wss://{$websocketURL}:{$websocketPORT}";
-$moduleURL = "https://".$_SERVER['HTTP_HOST']."/";
+$moduleURL = '/';
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
 ?>
 <!doctype html>
 
@@ -19,7 +30,6 @@ $moduleURL = "https://".$_SERVER['HTTP_HOST']."/";
 
 		<link rel='stylesheet' href='<?=$moduleURL?>modules/GOagent/css/jssip.GOautodial.css'>
 
-		<script src='<?=$moduleURL?>modules/GOagent/js/resources/js/antiglobal.js'></script>
 		<script>
 			// Set debug
 			//window.localStorage.setItem('debug', '* -engine* -socket* *ERROR* *WARN*');
@@ -32,15 +42,15 @@ $moduleURL = "https://".$_SERVER['HTTP_HOST']."/";
 		<script>
 			window.SETTINGS =
 			{
-				display_name        : '<?=$display_name?>',
-				uri                 : '<?=$websocketSIP?>',
-				password			: '<?=$phone_pass?>',
+				display_name        : <?=json_encode($display_name, $jsonFlags)?>,
+				uri                 : <?=json_encode($websocketSIP, $jsonFlags)?>,
+				password			: <?=json_encode($phone_pass, $jsonFlags)?>,
 				socket              :
 				{
-					uri           : '<?=$websocketURI?>',
+					uri           : <?=json_encode($websocketURI, $jsonFlags)?>,
 					via_transport : 'auto',
 				},
-				registrar_server    : '<?=$websocketURL?>',
+				registrar_server    : <?=json_encode($registrarServer, $jsonFlags)?>,
 				contact_uri         : null,
 				authorization_user  : null,
 				instance_id         : null,

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        DeleteContact.php
  * @brief       Handles Delete Lead/Contact Requests

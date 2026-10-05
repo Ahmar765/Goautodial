@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteAreacode.php
  * @brief       Handles Delete Areacode CID Requests

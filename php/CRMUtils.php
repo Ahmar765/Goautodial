@@ -138,32 +138,24 @@ class CRMUtils {
 	 * @param String $extension		(optional) Extension to be added to the filename.
 	 * @param String $lockFile		If true, touches the file to lock it.
 	 */
-	public static function generateUploadRelativePath($filename = null, $lockFile = false) {
-		require_once('RandomStringGenerator.php');
-		$basedir = CRM_UPLOADS_DIRNAME."/".date('Y')."/".date('m')."/";
-		$baseDirInDisk = \creamy\CRMUtils::creamyBaseDirectoryPath().$basedir;
-		if (!is_dir($baseDirInDisk)) { mkdir($baseDirInDisk, 0775, true); } // create dir if it doesn't exists
-		// check filename
-		if (empty($filename)) {
-			// return a random filename.
-			$rnd = new \creamy\RandomStringGenerator();
-			$filename = $rnd->generate(CRM_UPLOAD_FILENAME_LENGTH).".dat";
-		}
-		// check if file already exists.
-		$i = 1;
-		$filepath = $baseDirInDisk.$filename;
-		while (file_exists($filepath)) { // add -$i to filename
-			$components = pathinfo($filename, PATHINFO_DIRNAME | PATHINFO_BASENAME | PATHINFO_EXTENSION | PATHINFO_FILENAME);
-			$filename = $components["filename"]."-$i".(isset($components["extension"]) ? $components["extension"] : "");
-			$filepath = $baseDirInDisk.$filename;
-			$i++;
-		}
-		// lock file (if $lockFile is set) so no other upload can access it.
-		touch($filepath);
-		// return relative url
-		return $basedir.$filename;
-	}
-	
+    public static function generateUploadRelativePath($filename = null, $lockFile = false) {
+        $relative = CRM_UPLOADS_DIRNAME . '/' . date('Y') . '/' . date('m') . '/';
+        $directory = self::creamyBaseDirectoryPath() . $relative;
+        if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+            throw new \RuntimeException('Upload directory unavailable.');
+        }
+        $extension = is_string($filename) ? strtolower(pathinfo(basename(str_replace('\\', '/', $filename)), PATHINFO_EXTENSION)) : '';
+        $allowed = array('pdf', 'txt', 'csv', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'png', 'jpg', 'jpeg', 'gif', 'wav', 'mp3', 'ogg', 'zip');
+        if (!in_array($extension, $allowed, true)) $extension = 'dat';
+        $name = bin2hex(random_bytes(20)) . '.' . $extension;
+        if ($lockFile) {
+            $handle = fopen($directory . $name, 'x');
+            if ($handle === false) throw new \RuntimeException('Upload reservation failed.');
+            fclose($handle);
+        }
+        return $relative . $name;
+    }
+
 	/**
 	 * Generates a random RGB color. If $includeAlpha is true, it includes an extra "a" value for alpha.
 	 * @returns Array an associative array with a random color. i.e: "r" => 23, "g" => 141, "b" => 88.

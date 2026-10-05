@@ -1,4 +1,6 @@
-<?php	
+<?php
+require_once __DIR__ . '/php/RequestGuard.php';
+	
 /**
  * @file        settingscalltimes.php
  * @brief       Manage Calltimes
@@ -166,7 +168,7 @@
 									<select class="form-control call-time-user-group select2-1" name="call_time_user_group" style="width:100%;">
 										<option value="ALL"> <?php $lh->translateText("all_usergroups"); ?> </option>
 											<?php
-												for($i=0;$i<(!is_null($user_groups) && !is_null($user_groups->user_group) ? count($user_groups->user_group) : 0);$i++){
+												for($i=0;$i<count($user_groups->user_group);$i++){
 											?>
 												<option value="<?php echo $user_groups->user_group[$i];?>">  <?php echo $user_groups->user_group[$i]." - ".$user_groups->group_name[$i];?>  </option>
 											<?php

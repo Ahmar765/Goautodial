@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getDroppedPercentage.php
  * @brief       Displays total dropped calls percentage

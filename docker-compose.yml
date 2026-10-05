@@ -1,39 +1,64 @@
 services:
   web:
-    image: php:7.4-apache
-    container_name: goautodial-web
+    build: .
+    image: goautodial-web:local
+    restart: unless-stopped
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     volumes:
-      - ./:/var/www/html
+      - goautodial-uploads:/var/www/html/uploads
+      - goautodial-avatars:/var/www/html/img/avatars
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
       DB_HOST: db
-      DB_USER: goautodial
-      DB_PASS: goautodial
+      DB_USER: ${DB_USER:?Set DB_USER}
+      DB_PASS: ${DB_PASS:?Set DB_PASS}
       DB_NAME: goautodial
-    command: >
-      bash -c "
-      a2enmod rewrite &&
-      docker-php-ext-install mysqli &&
-      echo 'opcache.enable=0' > /usr/local/etc/php/conf.d/docker-php-ext-opcache.ini &&
-      apache2-foreground
-      "
+      APP_ENV: production
+      APP_URL: ${APP_URL:?Set APP_URL}
+      GO_API_URL: ${GO_API_URL:?Set GO_API_URL}
+      GO_API_USER: ${GO_API_USER:?Set GO_API_USER}
+      GO_API_PASSWORD: ${GO_API_PASSWORD:?Set GO_API_PASSWORD}
+      SESSION_DRIVER: database
+      SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?Set SESSION_ENCRYPTION_KEY}
+      DB_HOST_ASTERISK: ${DB_HOST_ASTERISK:?Set DB_HOST_ASTERISK}
+      DB_PORT_ASTERISK: ${DB_PORT_ASTERISK:-3306}
+      DB_NAME_ASTERISK: ${DB_NAME_ASTERISK:-asterisk}
+      DB_USER_ASTERISK: ${DB_USER_ASTERISK:?Set DB_USER_ASTERISK}
+      DB_PASS_ASTERISK: ${DB_PASS_ASTERISK:?Set DB_PASS_ASTERISK}
+      DB_HOST_KAMAILIO: ${DB_HOST_KAMAILIO:?Set DB_HOST_KAMAILIO}
+      DB_PORT_KAMAILIO: ${DB_PORT_KAMAILIO:-3306}
+      DB_NAME_KAMAILIO: ${DB_NAME_KAMAILIO:-kamailio}
+      DB_USERNAME_KAMAILIO: ${DB_USERNAME_KAMAILIO:?Set DB_USERNAME_KAMAILIO}
+      DB_PASSWORD_KAMAILIO: ${DB_PASSWORD_KAMAILIO:?Set DB_PASSWORD_KAMAILIO}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      SIP_DOMAIN: ${SIP_DOMAIN:-}
+      SIP_WS_HOST: ${SIP_WS_HOST:-}
+      SIP_WS_PORT: ${SIP_WS_PORT:-8089}
+      SMTP_ENCRYPTION_SECRET: ${SMTP_ENCRYPTION_SECRET:-}
+      SMTP_ENCRYPTION_IV_SECRET: ${SMTP_ENCRYPTION_IV_SECRET:-}
+      WHATSAPP_SEND_URL: ${WHATSAPP_SEND_URL:-}
+      WHATSAPP_WEBHOOK_URL: ${WHATSAPP_WEBHOOK_URL:-}
 
   db:
-    image: mariadb:10.6
-    container_name: goautodial-db
+    image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}
       MYSQL_DATABASE: goautodial
-      MYSQL_USER: goautodial
-      MYSQL_PASSWORD: goautodial
-    ports:
-      - "127.0.0.1:3308:3306"
+      MYSQL_USER: ${DB_USER:?Set DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS:?Set DB_PASS}
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     volumes:
       - goautodial-db-data:/var/lib/mysql
 
 volumes:
   goautodial-db-data:
+  goautodial-uploads:
+  goautodial-avatars:

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		telephonylist.php
  * @brief 		Manage List and Upload Leads
@@ -139,19 +141,6 @@
 						** API to get data of tables
 						****/
 						$lists = $api->API_getAllLists();
-						if (!is_object($lists) || !isset($lists->list_id) || !is_array($lists->list_id)) {
-							$lists = (object) array(
-								'list_id' => array(),
-								'list_name' => array(),
-								'active' => array(),
-								'leads_count' => array(),
-								'campaign_id' => array(),
-								'next_listID' => 1000
-							);
-						}
-						if (!isset($lists->next_listID) || !is_numeric($lists->next_listID)) {
-							$lists->next_listID = 1000;
-						}
 						
 						//echo "<!--\n";
 						//var_dump($lists);
@@ -161,14 +150,7 @@
                         <div class="col-lg-9">
 		                <div class="panel panel-default">
 							<div class="panel-body">
-							<legend id="legend_title" class="clearfix">
-								<span><?php $lh->translateText("lists"); ?></span>
-								<?php if ($perm->list->list_create !== 'N') { ?>
-								<button type="button" class="btn btn-primary btn-sm pull-right" id="list_add_btn" data-toggle="modal" data-target="#list-modal" style="margin-top:4px;">
-									<i class="fa fa-plus"></i> <?php $lh->translateText("add_list"); ?>
-								</button>
-								<?php } ?>
-							</legend>
+							<legend id="legend_title"><?php $lh->translateText("lists"); ?></legend>
 								<div role="tabpanel">
 							
 									<ul role="tablist" class="nav nav-tabs nav-justified">
@@ -235,7 +217,7 @@
 												</strong></td>
 												<td><?php echo $lists->list_name[$i];?></td>
 												<td><?php echo $lists->active[$i];?></td>
-												<td><a href="./telephonyleads.php?list_id=<?php echo urlencode($lists->list_id[$i]); ?>" title="View leads in this list"><?php echo $lists->tally[$i];?></a></td>
+												<td><?php echo $lists->tally[$i];?></td>
 												<td><?php echo $lists->campaign_name[$i];?></td>
 												<td><?php echo $lists->cf_count[$i];?></td>
 												<?php if ($perm->list->list_delete !== 'N'){ ?>
@@ -434,26 +416,15 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 </div><!-- ./wrapper -->
 
 <!-- FIXED ACTION BUTTON -->
-<div class="bottom-menu skin-blue" id="list_fab_wrap" style="position:fixed !important;bottom:24px !important;right:24px !important;z-index:1030 !important;<?php if ($perm->list->list_create === 'N') { echo 'display:none !important;'; } ?>">
-	<div class="action-button-circle" data-toggle="modal" data-target="#list-modal" id="list_fab" title="<?php $lh->translateText("list_wizard"); ?>" style="cursor:pointer;">
-		<?php print $ui->getCircleButton("list_and_call_recording", "plus"); ?>
-	</div>
+<div class="action-button-circle" data-toggle="modal" data-target="#list-modal" id="list_fab" title="<?php $lh->translateText("list_wizard"); ?>">
+<?php print $ui->getCircleButton("list_and_call_recording", "plus"); ?>
 </div>
-<div class="bottom-menu skin-blue" id="dnc_fab_wrap" style="position:fixed !important;bottom:24px !important;right:24px !important;z-index:1030 !important;display:none;">
-	<div class="action-button-circle" data-toggle="modal" data-target="#dnc-modal" id="dnc_fab" title="<?php $lh->translateText("add_delete_dnc"); ?>" style="cursor:pointer;">
-		<?php print $ui->getCircleButton("list_and_call_recording", "pencil-square-o"); ?>
-	</div>
+<div class="action-button-circle" data-toggle="modal" data-target="#dnc-modal" id="dnc_fab" style="display:none;" title="<?php $lh->translateText("add_delete_dnc"); ?>">
+<?php print $ui->getCircleButton("list_and_call_recording", "pencil-square-o"); ?>
 </div>
 <?php
 	$campaign = $api->API_getAllCampaigns();
-	if (!is_object($campaign) || !isset($campaign->campaign_id) || !is_array($campaign->campaign_id)) {
-		$campaign = (object) array('campaign_id' => array(), 'campaign_name' => array());
-	}
-	if (!isset($lists) || !is_object($lists)) {
-		$lists = (object) array('list_id' => array(), 'list_name' => array(), 'next_listID' => 1000);
-	}
-
-	$next_list = $lists->next_listID;
+	
 	$next_listname = "ListID ".$lists->next_listID;
 	$datenow = date("j-n-Y");
 	$next_listdesc = "Auto-generated - ListID - ".$datenow;
@@ -531,10 +502,6 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 				</form>
 
 				</div> <!-- end of modal body -->
-				<div class="modal-footer">
-					<button type="button" class="btn btn-default" data-dismiss="modal"><?php $lh->translateText("close"); ?></button>
-					<button type="button" class="btn btn-primary" id="list_create_submit"><?php $lh->translateText("submit"); ?></button>
-				</div>
 			</div>
 		</div>
 	</div><!-- end of modal -->
@@ -648,16 +615,17 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 	<script type="text/javascript">
 		$(document).ready(function() {
 			var list_create = <?php echo ($perm->list->list_create !== "N" ? 1 : 0 ) ?>;
-			var list_read 	= <?php echo ($perm->list->list_read !== "N" ? 1 : 0 ) ?>;
+			var list_read 	= <?php echo ($perm->list->list_create !== "N" ? 1 : 0 ) ?>;
 			var list_update = <?php echo ($perm->list->list_create !== "N" ? 1 : 0 ) ?>;			
 			var list_delete = <?php echo ($perm->list->list_delete !== "N" ? 1 : 0 ) ?>;
 			var list_upload = <?php echo ($perm->list->list_upload !== "N" ? 1 : 0 ) ?>;
 
 			if (list_create != 1) {
-				$("#list_fab_wrap, #list_add_btn").hide();
+				$("#list_fab").attr("disabled", true);
+				$("#list_fab").attr("hidden", true);
 			} else {
-				$("#list_fab_wrap").show();
-				$("#list_add_btn").show();
+				$("#list_fab").attr("disabled", false);
+				$("#list_fab").attr("hidden", false);			
 			}
 			if (list_upload != 1) {
 				//console.log(list_upload);
@@ -680,17 +648,17 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 				
 				if(target == "#list_tab"){
 					$("#list_sidebar").show();
-					if (list_create == 1) { $("#list_fab_wrap, #list_add_btn").show(); }
+					$("#list_fab").show();
 					$("#dnc_sidebar").hide();
-					$("#dnc_fab_wrap").hide();
-					$("#legend_title span").first().text("Lists");
+					$("#dnc_fab").hide();
+					$("#legend_title").text("Lists");
 				}
 				if(target == "#dnc_tab"){
 					$("#dnc_sidebar").show();
-					$("#dnc_fab_wrap").show();
+					$("#dnc_fab").show();
 					$("#list_sidebar").hide();
-					$("#list_fab_wrap, #list_add_btn").hide();
-					$("#legend_title span").first().text("DNC");
+					$("#list_fab").hide();
+					$("#legend_title").text("DNC");
 				}
 			});
 			
@@ -742,57 +710,63 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 				]									
 			});			
 				
-			// add list (direct submit — jQuery Steps in modals often hides/breaks Finish)
+			// add list
 			if (list_create == 1) {
-				var form = $("#create_form");
+				//console.log(list_create);
+				var form = $("#create_form"); // init form wizard
+
 				form.validate({
 					errorPlacement: function errorPlacement(error, element) { element.after(error); }
 				});
-
-				function submitCreateListForm() {
-					$('#add_list_id').prop("disabled", false);
-					if (!form.valid()) {
-						if ($('#auto_generate').is(":checked")) {
-							$('#add_list_id').prop("disabled", true);
+				
+				form.children("div").steps({
+					headerTag: "h4",
+					bodyTag: "fieldset",
+					transitionEffect: "slideLeft",
+					onStepChanging: function (event, currentIndex, newIndex)
+					{
+						// Allways allow step back to the previous step even if the current step is not valid!
+						if (currentIndex > newIndex) {
+							return true;
 						}
-						return;
+	
+						// Clean up if user went backward before
+						if (currentIndex < newIndex)
+						{
+							// To remove error styles
+							$(".body:eq(" + newIndex + ") label.error", form).remove();
+							$(".body:eq(" + newIndex + ") .error", form).removeClass("error");
+						}
+	
+						form.validate().settings.ignore = "";
+						return form.valid();
+					},
+					onFinishing: function (){
+						form.validate().settings.ignore = "";
+						return form.valid();
+					},
+					onFinished: function (){
+						$('#finish').text("<?php $lh->translateText("loading"); ?>");
+						$('#finish').attr("disabled", true);
+						$('#add_list_id').attr("disabled", false);
+						// Submit form via ajax
+						$.ajax({
+							url: "./php/AddList.php",
+							type: 'POST',
+							data: $('#create_form').serialize(),
+							success: function(data) {
+								console.log(data);
+								$('#finish').text("<?php $lh->translateText("submit"); ?>");
+								$('#finish').attr("disabled", false);
+								if (data == 1) {
+									swal({title: "<?php $lh->translateText("add_list_success"); ?>",text: "<?php $lh->translateText("add_list_success"); ?>",type: "success"},function(){window.location.href = 'telephonylist.php';});
+								} else {
+									sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>", "error");
+								}
+							}
+						});
 					}
-					var $btn = $('#list_create_submit');
-					$btn.prop("disabled", true).text("<?php $lh->translateText("loading"); ?>");
-					$.ajax({
-						url: "./php/AddList.php",
-						type: 'POST',
-						dataType: 'json',
-						data: form.serialize(),
-					}).done(function(data) {
-						if (data && (data === 1 || data.ok === 1 || data.status === 1)) {
-							swal({
-								title: "<?php $lh->translateText("add_list_success"); ?>",
-								text: "<?php $lh->translateText("add_list_success"); ?>",
-								type: "success"
-							}, function() { window.location.href = 'telephonylist.php'; });
-						} else {
-							var msg = (data && data.message) ? data.message : "<?php $lh->translateText("something_went_wrong"); ?>";
-							sweetAlert("<?php $lh->translateText("oups"); ?>", msg, "error");
-						}
-					}).fail(function(xhr) {
-						var msg = "<?php $lh->translateText("something_went_wrong"); ?>";
-						if (xhr.responseText) {
-							try {
-								var j = JSON.parse(xhr.responseText);
-								if (j.message) { msg = j.message; }
-							} catch (e) {}
-						}
-						sweetAlert("<?php $lh->translateText("oups"); ?>", msg, "error");
-					}).always(function() {
-						$btn.prop("disabled", false).text("<?php $lh->translateText("submit"); ?>");
-						if ($('#auto_generate').is(":checked")) {
-							$('#add_list_id').prop("disabled", true);
-						}
-					});
-				}
-
-				$("#list_create_submit").on("click", submitCreateListForm);
+				});
 			}
 
 			// edit
@@ -823,11 +797,8 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 			if (list_delete == 1) {
 				console.log(list_delete);
 				$(document).on('click','.delete-list',function() {
-					var listid = String($(this).attr('data-id') || '').trim();
-					if (!listid) {
-						sweetAlert("<?php $lh->translateText("oups"); ?>", "Error: No list id provided", "error");
-						return;
-					}
+					var listid = [];
+					listid.push($(this).attr('data-id'));
 					console.log(listid);
 					swal({
 						title: "<?php $lh->translateText("are_you_sure"); ?>?",
@@ -845,21 +816,16 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 								$.ajax({
 									url: "./php/DeleteList.php",
 									type: 'POST',
-									dataType: 'json',
 									data: {
-										listid: listid,
-										list_id: listid
+										listid: listid
 									},
 									success: function(data) {
 									console.log(data);
-										if(data == 1 || data === '1'){
+										if(data == 1){
 											swal({title: "<?php $lh->translateText("delete_list_success"); ?>",text: "<?php $lh->translateText("delete_list_success_msg"); ?>",type: "success"},function(){window.location.href = 'telephonylist.php';});
 										}else{
-											sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>! "+data, "error");
+											sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>!", "error");
 										}
-									},
-									error: function(xhr) {
-										sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>! " + (xhr.responseText || 'Request failed'), "error");
 									}
 								});
 
@@ -875,10 +841,6 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 					return this.id;
 				}).get();
 				console.log(arr);
-				if (!arr.length) {
-					sweetAlert("<?php $lh->translateText("oups"); ?>", "Error: No list id provided", "error");
-					return;
-				}
 				swal({
 						title: "<?php $lh->translateText("are_you_sure"); ?>",
 						text: "<?php $lh->translateText("action_cannot_be_undone"); ?>.",
@@ -895,21 +857,16 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 								$.ajax({
 									url: "./php/DeleteList.php",
 									type: 'POST',
-									dataType: 'json',
 									data: {
-										listid: arr,
-										list_id: arr.join(',')
+										listid: arr
 									},
 									success: function(data) {
 									console.log(data);
-										if(data == 1 || data === '1'){
+										if(data == 1){
 											swal({title: "<?php $lh->translateText("delete_list_success"); ?>",text: "<?php $lh->translateText("delete_list_success_msg"); ?>!",type: "success"},function(){window.location.href = 'telephonylist.php';});
 										}else{
 											sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>! "+data, "error");
 										}
-									},
-									error: function(xhr) {
-										sweetAlert("<?php $lh->translateText("oups"); ?>", "<?php $lh->translateText("something_went_wrong"); ?>! " + (xhr.responseText || 'Request failed'), "error");
 									}
 								});
 							} else {
@@ -1123,10 +1080,10 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 							if (data == 1) {
 								swal({title: "<?php $lh->translateText("deleted"); ?> DNC", text: "<?php $lh->translateText("delete_dnc"); ?>", type: "success"},function(){window.location.href = 'telephonylist.php?dnc_tab';});								
 								$("#dnc_sidebar").show();
-								$("#dnc_fab_wrap").show();
+								$("#dnc_fab").show();
 								$("#list_sidebar").hide();
-								$("#list_fab_wrap, #list_add_btn").hide();
-								$("#legend_title span").first().text("DNC");								
+								$("#list_fab").hide();
+								$("#legend_title").text("DNC");								
 							} else {
 								if (data == 10116) {
 									sweetAlert("<?php echo $lh->translateText("oups"); ?>", "<?php echo $lh->translateText("dnc_already_exist"); ?>", "error");
@@ -1161,10 +1118,10 @@ print $ui->calloutErrorMessage($lh->translationFor("you_dont_have_permission"));
 			
 			if (window.location.href.indexOf("dnc_tab") > -1) {
 				$("#dnc_sidebar").show();
-				$("#dnc_fab_wrap").show();
+				$("#dnc_fab").show();
 				$("#list_sidebar").hide();
-				$("#list_fab_wrap, #list_add_btn").hide();
-				$("#legend_title span").first().text("DNC");
+				$("#list_fab").hide();
+				$("#legend_title").text("DNC");						
 			}			
 			
 			// RESET LEAD MAPPING CONTAINER ON CLOSE

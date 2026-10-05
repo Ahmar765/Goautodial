@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file 		index.php
  * @brief 		Dashboard application
@@ -64,7 +66,7 @@
 		$use_webrtc = $checkWebRTC;
 	}
 	
-	$goAPI = (empty($_SERVER['HTTPS'])) ? str_replace('https:', 'http:', gourl) : str_replace('http:', 'https:', gourl);
+	$goAPI = gourl;
 
 	/*
 	 * API for call statistics
@@ -1619,7 +1621,7 @@ function goGetInSession(type) {
 	var phone_login = "<?php echo $_SESSION['phone_login'];?>";
 	var phone_pass = "<?php echo $_SESSION['phone_this'];?>";
 	var uName = "<?php echo $_SESSION["user"]; ?>";
-	var uPass = "<?php echo $_SESSION['phone_this'];?>";
+	var uPass = ''; // Monitoring credentials are supplied by the server-side proxy.
 	//console.log(phone_login);
 	if (phone_login.length > 0 && phone_pass.length > 0) {
 		var use_webrtc = <?=($use_webrtc ? $use_webrtc : 0)?>;
@@ -1673,7 +1675,7 @@ function goGetInSession(type) {
 				if ((use_webrtc && phone.isConnected()) || !use_webrtc) {
 					$.ajax({
 						type: 'POST',
-						url: '<?=$goAPI?>/goBarging/goAPI.php',
+						url: '/php/MonitorAPI.php',
 						processData: true,
 						data: postData,
 						dataType: "json",

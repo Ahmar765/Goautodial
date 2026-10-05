@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        AddAreacode.php
  * @brief       Handles Add AC CID Request

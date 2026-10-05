@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getAgentsStatistics.php
  * @brief       Displays agent statistics (in-call, waiting and paused)

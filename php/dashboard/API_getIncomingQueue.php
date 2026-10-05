@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getIncomingQueue.php
  * @brief       Displays calls in inbound queue

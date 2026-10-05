@@ -25,7 +25,7 @@
 
 // dependencies
 namespace creamy;
-@include_once("Config.php");
+require_once __DIR__ . '/Config.php';
 
 
 // Database Connectors
@@ -146,7 +146,7 @@ class DatabaseConnectorFactory {
 			    // return MySQL database connector
 			    return $mysqldb;
 		    } catch (\Throwable $e) {
-		    	return null;
+		    	throw $e;
 		    }
 		    
 	    } else {
@@ -171,7 +171,7 @@ class DatabaseConnectorFactory {
 			    // return MySQL database connector
 			    return $mysqldb;
 		    } catch (\Throwable $e) {
-		    	return null;
+		    	throw $e;
 		    }
 		    
 	    } else {

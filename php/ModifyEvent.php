@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
 	The MIT License (MIT)
 	
@@ -43,7 +45,6 @@ function get_timezone_offset($remote_tz, $origin_tz = null) {
     return $offset;
 }
 
-error_log("Modifying event. Data: ".var_export($_POST, true));
 
 $lh = \creamy\LanguageHandler::getInstance();
 $user = \creamy\CreamyUser::currentUser();

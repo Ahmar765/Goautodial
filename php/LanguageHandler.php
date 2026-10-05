@@ -29,7 +29,7 @@ namespace creamy;
 require_once('CRMDefaults.php');
 require_once('CRMUtils.php');
 require_once('DatabaseConnectorFactory.php');
-@include_once('Config.php');
+require_once __DIR__ . '/Config.php';
 
 define('CRM_LANGUAGE_DEFAULT_LOCALE', 'en_US');
 define('CRM_LANGUAGE_BASE_DIR', DIRECTORY_SEPARATOR.'lang'.DIRECTORY_SEPARATOR);

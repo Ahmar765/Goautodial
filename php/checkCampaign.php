@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        checkCampaign.php
  * @brief       Handles Check Add/Edit Campaign, Disposition & Lead Filter Details Requests
@@ -44,11 +46,6 @@
 		exit;
 	}
 
-	if (is_object($output) && isset($output->result) && $output->result !== 'success') {
-		echo json_encode(0);
-		exit;
-	}
-
-	echo json_encode(1);
+	echo json_encode(is_object($output) && isset($output->result) ? $output->result : 0);
 
 ?>

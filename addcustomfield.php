@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file        addcustomfield.php
  * @brief       Handles Add Custom Field Request

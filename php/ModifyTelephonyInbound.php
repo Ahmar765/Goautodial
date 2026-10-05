@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifyTelephonyInbound.php
  * @brief       Handles Modify Requests for Inbound, IVR & DID

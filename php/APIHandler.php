@@ -24,51 +24,27 @@
 
 	namespace creamy;
 
-	ini_set('memory_limit','2048M');
-	ini_set('upload_max_filesize', '600M');
-	ini_set('post_max_size', '600M');
-	ini_set('max_execution_time', 0);
 
-	// dependencies (always resolve relative to this file)
-	require_once __DIR__ . '/CRMDefaults.php';
-	require_once __DIR__ . '/LanguageHandler.php';
-	require_once __DIR__ . '/CRMUtils.php';
-	require_once __DIR__ . '/goCRMAPISettings.php';
-	require_once __DIR__ . '/GoHttpClient.php';
-	require_once __DIR__ . '/SessionHandler.php';
-	@include_once __DIR__ . '/Config.php';
+
+	// dependencies
+	require_once('CRMDefaults.php');
+	require_once('LanguageHandler.php');
+	require_once('CRMUtils.php');
+	require_once('goCRMAPISettings.php');
+    require_once __DIR__ . '/Security.php';
+    require_once __DIR__ . '/ApiClient.php';
+	require_once('SessionHandler.php');
 	$session_class = new \creamy\SessionHandler();
 
-	// ini_set('display_errors', 1);
-	// ini_set('display_startup_errors', 1);
+	// ini_set('display_errors', '0');
+	// ini_set('display_errors', '0');
 	// error_reporting(E_ALL);
 
-	if(isset($_SESSION["user"])){
-		define("session_user", $_SESSION["user"]);
-		define("session_usergroup", $_SESSION["usergroup"]);
-		define("session_password", $_SESSION["phone_this"]);
-		define("log_pass", $_SESSION["password_hash"]);
-		//define("responsetype", "json");
-	}else{
-		define("session_user", "TEST DEBUG");
-                define("session_usergroup", "ADMIN");
-                define("session_password", "TEST DEBUG");
-                define("log_pass", "TEST");
-	}
-
-	$uri = $_SERVER['REQUEST_URI'];
-	$uri = explode('/', $uri);
-	$uri = explode('.php', $uri[1]);
-	$uri = $uri[0];
-
-	if ($uri != 'index') {
-		if ($uri != 'login') {
-			if (!isset($_SESSION['user'])){
-// || $_SESSION["userrole"] == CRM_DEFAULTS_USER_ROLE_AGENT) { 
-				//if ($uri == 'php') die("This file cannot be accessed directly"); 
-			}
-		}
-	}
+    // Anonymous includes receive no identity or privileges.
+    define('session_user', $_SESSION['user'] ?? '');
+    define('session_usergroup', $_SESSION['usergroup'] ?? '');
+    define('session_password', $_SESSION['phone_this'] ?? '');
+    define('log_pass', $_SESSION['password_hash'] ?? '');
 
 	/**
 	*  APIHandler.
@@ -125,35 +101,16 @@
 		* @return Array $output
 		*/
 		public function API_Request($folder, $postfields, $request_data = false){
-			$url = gourl."/".$folder."/goAPI.php";
-			$responsetype = "json";
-
-			// Constant Data to be passed
-			$default_entries = array(
-				'goUser' => session_user,
-				'goPass' => session_password,
-				'responsetype' => $responsetype,
-				'session_user' => session_user,
-				'log_user' => session_user,
-				'log_group' => session_usergroup,
-				'log_ip' => $_SERVER['REMOTE_ADDR'],
-				'log_pass' => log_pass,
-				'hostname' => $_SERVER['REMOTE_ADDR']);
-
-			$postdata = array_merge($default_entries, $postfields);
-
-			if (!GoHttpClient::canPost()) {
-				return $request_data ? '' : null;
-			}
-
-			$data = GoHttpClient::post($url, $postdata, 30);
-			$output = ($data !== false && $data !== '') ? json_decode($data) : null;
-			
-			if($request_data === true)
-				return $data;
-			else
-				return $output;
-		}
+            if (PHP_SAPI !== 'cli' && !Security::authenticated($_SESSION ?? array())) return null;
+            if (!preg_match('/^[A-Za-z0-9]+$/', $folder)) throw new \InvalidArgumentException('Invalid API resource.');
+            $identity = PHP_SAPI === 'cli' ? array('goUser' => goUser, 'goPass' => goPass)
+                : array('goUser' => session_user, 'goPass' => session_password);
+            $entries = array_merge($identity, array('responsetype' => 'json',
+                'session_user' => session_user, 'log_user' => session_user, 'log_group' => session_usergroup,
+                'log_pass' => log_pass, 'log_ip' => $_SERVER['REMOTE_ADDR'] ?? '', 'hostname' => $_SERVER['REMOTE_ADDR'] ?? ''));
+            $body = ApiClient::post(gourl . '/' . $folder . '/goAPI.php', array_merge($postfields, $entries));
+            return $request_data ? $body : ($body === null ? null : json_decode($body));
+        }
 
 		/*
 		* API_Upload - Handles All API with Upload. Examples: Upload Leads, Upload Voicefiles
@@ -162,90 +119,22 @@
 		* 
 		* @return Array $output
 		*/
-		public function API_Upload($folder, $postfields, $return_data = NULL){
-			$url = gourl."/".$folder."/goAPI.php";
-			$responsetype = "json";
-			
-			// Constant Data to be passed
-			$default_entries = array(
-				'goUser' => session_user,
-				'goPass' => session_password,
-				'responsetype' => $responsetype,
-				'session_user' => session_user,
-				'log_user' => session_user,
-				'log_group' => session_usergroup,
-				'log_pass' => log_pass,
-				'log_ip' => $_SERVER['REMOTE_ADDR'],
-				'hostname' => $_SERVER['REMOTE_ADDR']);
+        public function API_Upload($folder, $postfields, $return_data = NULL) {
+            if (PHP_SAPI !== 'cli' && !Security::authenticated($_SESSION ?? array())) return null;
+            if (!preg_match('/^[A-Za-z0-9]+$/', $folder)) throw new \InvalidArgumentException('Invalid API resource.');
+            $url = gourl . '/' . $folder . '/goAPI.php';
+            $entries = array('goUser' => PHP_SAPI === 'cli' ? goUser : session_user,
+                'goPass' => PHP_SAPI === 'cli' ? goPass : session_password, 'responsetype' => 'json',
+                'session_user' => session_user, 'log_user' => session_user, 'log_group' => session_usergroup,
+                'log_pass' => log_pass, 'log_ip' => $_SERVER['REMOTE_ADDR'] ?? '', 'hostname' => $_SERVER['REMOTE_ADDR'] ?? '');
+            $data = ApiClient::post($url, array_merge($postfields, $entries), 120, true);
+            $output = $data === null ? null : json_decode($data);
+            return !empty($return_data) ? array('output' => $output, 'data' => $data, 'URL' => $url, 'CONNECTION' => array()) : $output;
+        }
 
-			$postdata = array_merge($default_entries, $postfields);
-
-			if (!GoHttpClient::canPost()) {
-				return !empty($return_data) ? array('output' => null, 'data' => '', 'URL' => $url, 'CONNECTION' => $postdata) : null;
-			}
-			if (GoHttpClient::hasFileFields($postdata) && (!extension_loaded('curl') || !function_exists('curl_init'))) {
-				return !empty($return_data) ? array('output' => null, 'data' => '', 'URL' => $url, 'CONNECTION' => $postdata) : null;
-			}
-
-			$data = GoHttpClient::post($url, $postdata, 120);
-			$output = ($data !== false && $data !== '') ? json_decode($data) : null;
-				
-			if(!empty($return_data))
-				return array("output" => $output, "data" => $data, "URL" => $url, "CONNECTION" => $postdata);
-			else
-				return $output;
-		}
-
-		public function API_StarwoodTestUpload($return_data = NULL){
-			$url = gourl."/goUploadLeads/goAPI.php";
-			$responsetype = "json";
-			$upload_url = "https://wits.justgocloud.com/leadsdata.csv";
-			
-			$finfo = finfo_open('text/csv');
-			$finfo = finfo_file($finfo, $upload_url);
-
-			//$goFileMe = new CURLFile($upload_url, 'text/csv');
-			//$goFileMe = curl_file_create($upload_url, 'text/csv', $upload_url);
-
-			// Constant Data to be passed
-			$default_entries = array(
-				'goUser' => 'admin',
-				'goPass' => '6Arlk87V7SKfZU%2Fm6LPceuERHduvFiu',
-				'responsetype' => $responsetype,
-				'session_user' => 'admin',
-				'log_user' => 'admin',
-				'log_group' => 'ADMIN',
-				'log_pass' => log_pass,
-				'log_ip' => $_SERVER['REMOTE_ADDR'],
-				'hostname' => $_SERVER['REMOTE_ADDR'],
-				'goAction' => 'goUploadMe',
-				'goDupcheck' => 'DUPLIST',
-				'goListId' => '5054',
-				'goFileMe' => $goFileMe
-			);
-
-			$postdata = $default_entries;
-			// Call the API
-			$ch = curl_init();
-			curl_setopt($ch, CURLOPT_URL, $url);
-			curl_setopt($ch, CURLOPT_POST, 1);
-			curl_setopt($ch, CURLOPT_POSTFIELDS, $postdata);
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			//curl_setopt($ch, CURLOPT_CONNECTTIMEOUT , 0); //gg
-			curl_setopt($ch, CURLOPT_SAFE_UPLOAD, true);
-			curl_setopt($ch, CURLOPT_TIMEOUT  , 0); //gg
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-			$data = curl_exec($ch);
-			curl_close($ch);
-			$output = json_decode($data);
-				
-			/*if(!empty($return_data))
-				return array("output" => $output, "data" => $data, "URL" => $url, "CONNECTION" => $postdata);
-			else
-				return $output;*/
-
-			return $data;
-		}
+        public function API_StarwoodTestUpload($return_data = NULL) {
+            throw new \RuntimeException('The development-only lead upload has been removed.');
+        }
 
 		public function API_getGOPackage(){
 			$postfields = array(
@@ -264,161 +153,17 @@
 			return $this->API_Request("goUserGroups", $postfields);
 		}
 
-		public function goGetPermissions($type = 'dashboard') {
-			
-			$permissions = $this->API_goGetGroupPermission();
-			$decoded_permission = (is_object($permissions) && isset($permissions->data) && isset($permissions->data->permissions))
-				? json_decode($permissions->data->permissions)
-				: null;
+        public function goGetPermissions($type = 'dashboard') {
+            require_once __DIR__ . '/Permissions.php';
+            return Permissions::forResponse($this->API_goGetGroupPermission(), $type);
+        }
 
-			// Full local-admin defaults when goAPI permissions are unavailable
-			$allowAll = (object) array(
-				'dashboard_display' => 'Y',
-				'inbound_read' => 'Y',
-				'inbound_create' => 'Y',
-				'inbound_update' => 'Y',
-				'inbound_delete' => 'Y',
-				'ivr_read' => 'Y',
-				'ivr_create' => 'Y',
-				'ivr_update' => 'Y',
-				'ivr_delete' => 'Y',
-				'did_read' => 'Y',
-				'did_create' => 'Y',
-				'did_update' => 'Y',
-				'did_delete' => 'Y',
-				'campaign_read' => 'Y',
-				'campaign_create' => 'Y',
-				'campaign_update' => 'Y',
-				'campaign_delete' => 'Y',
-				'list_read' => 'Y',
-				'list_create' => 'Y',
-				'list_update' => 'Y',
-				'list_delete' => 'Y',
-				'user_read' => 'Y',
-				'user_create' => 'Y',
-				'user_update' => 'Y',
-				'user_delete' => 'Y',
-				'voicefiles_play' => 'Y',
-				'voicefiles_upload' => 'Y',
-				'voicefiles_download' => 'Y',
-				'voicefiles_delete' => 'Y',
-				'moh_read' => 'Y',
-				'moh_create' => 'Y',
-				'moh_update' => 'Y',
-				'moh_delete' => 'Y',
-				'voicemail_read' => 'Y',
-				'voicemail_create' => 'Y',
-				'voicemail_update' => 'Y',
-				'voicemail_delete' => 'Y',
-			);
-			$return = NULL;
-			if (!empty($decoded_permission)) {
-				$types = explode(",", $type);
-				if (count($types) > 1) {
-					$return = new \stdClass();
-					foreach ($types as $t) {
-						if (isset($decoded_permission->{$t})) {
-							$return->{$t} = $decoded_permission->{$t};
-						} else {
-							// Missing module in permission JSON → allow locally
-							$return->{$t} = $allowAll;
-						}
-					}
-				} else {
-					if ($type == 'sidebar') {
-						$return = $permissions;
-					} else if (isset($decoded_permission->{$type})) {
-						$return = $decoded_permission->{$type};
-					} else {
-						$return = null;
-					}
-				}
-			}
+        public function API_getLoginInfo($user) {
+            $result = $this->API_Request('goAgent', array('goAction' => 'goGetLoginInfo',
+                'goUserID' => $user, 'goCampaign' => $_SESSION['campaign_id'] ?? '', 'isPBP' => 0, 'bcrypt' => 0));
+            return is_object($result) ? ($result->data ?? null) : null;
+        }
 
-			if ($return === NULL) {
-				$return = new \stdClass();
-				foreach (explode(",", $type) as $t) {
-					$return->{$t} = $allowAll;
-				}
-			}
-
-			// Normalize missing create/read flags so FAB/buttons are not hidden offline
-			$types = explode(",", $type);
-			foreach ($types as $t) {
-				if (!isset($return->{$t}) || !is_object($return->{$t})) {
-					$return->{$t} = clone $allowAll;
-					continue;
-				}
-				foreach ((array) $allowAll as $k => $v) {
-					if (!isset($return->{$t}->{$k}) || $return->{$t}->{$k} === '' || $return->{$t}->{$k} === null) {
-						$return->{$t}->{$k} = $v;
-					}
-				}
-			}
-
-			// Local XAMPP: never hide upload/create for audio when goAPI perms are incomplete
-			$localFb = defined('CRM_LOGIN_LOCAL_DB_FALLBACK') && CRM_LOGIN_LOCAL_DB_FALLBACK === true;
-			if ($localFb) {
-				foreach ($types as $t) {
-					if (!isset($return->{$t}) || !is_object($return->{$t})) {
-						continue;
-					}
-					foreach ((array) $allowAll as $k => $v) {
-						if (preg_match('/_(create|upload|play|read|download)$/', $k) && ($return->{$t}->{$k} ?? 'N') === 'N') {
-							// Only override when permission object lacks a real grant from goAPI data
-							if (!isset($decoded_permission->{$t}) || !isset($decoded_permission->{$t}->{$k})) {
-								$return->{$t}->{$k} = $v;
-							}
-						}
-					}
-				}
-			}
-
-			return $return;
-		}
-		
-		public function API_getLoginInfo($user) {
-			$camp = (isset($_SESSION['campaign_id']) && strlen($_SESSION['campaign_id']) > 2) ? $_SESSION['campaign_id'] : '';
-			$url = gourl.'/goAgent/goAPI.php';
-			$fields = array(
-				'goAction' => 'goGetLoginInfo',
-				'goUser' => session_user,
-				'goPass' => session_password,
-				'responsetype' => 'json',
-				'session_user' => session_user,
-				'log_ip' => $_SERVER['REMOTE_ADDR'],
-				'goUserID' => $user,
-				'goCampaign' => $camp,
-				'isPBP' => 0,
-				'bcrypt' => 0
-			);	
-			
-			//url-ify the data for the POST
-			$fields_string = "";
-			foreach($fields as $key=>$value) { $fields_string .= $key.'='.$value.'&'; }
-			rtrim($fields_string, '&');
-
-			//open connection
-			$ch = curl_init();
-			
-			//set the url, number of POST vars, POST data
-			curl_setopt($ch, CURLOPT_URL, $url);
-			curl_setopt($ch, CURLOPT_POST, count($fields));
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-			curl_setopt($ch, CURLOPT_POSTFIELDS, $fields_string);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-			curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-			
-			//execute post
-			$data = curl_exec($ch);
-			$result = json_decode($data);
-			
-			//close connection
-			curl_close($ch);
-			
-			return $result->data;
-		}
-		
 		public function API_getAllPauseCodes($campaign_id) {
 			$postfields = array(
 				'goAction' => 'goGetAllPauseCodes',
@@ -517,65 +262,7 @@
 			$postfields = array(
 				'goAction' => 'goGetAllPhones'
 			);				
-			$result = $this->API_Request("goPhones", $postfields);
-			if (is_null($result) || empty($result)) {
-				// Fallback: read from local goautodial.phones table
-				try {
-					$db_host = defined('DB_HOST')     ? DB_HOST     : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT')     ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'goautodial', $db_port);
-					if (!$conn->connect_error) {
-						$chk = $conn->query("SHOW TABLES LIKE 'phones'");
-						if ($chk && $chk->num_rows > 0) {
-							$res = $conn->query("SELECT extension, server_ip, protocol, active, messages, old_messages, fullname, user_group FROM phones ORDER BY extension");
-							$obj = new \stdClass();
-							$obj->result        = "success";
-							$obj->extension     = [];
-							$obj->server_ip     = [];
-							$obj->protocol      = [];
-							$obj->active        = [];
-							$obj->messages      = [];
-							$obj->old_messages  = [];
-							$obj->fullname      = [];
-							$obj->user_group    = [];
-							$maxExt = 1000;
-							if ($res && $res->num_rows > 0) {
-								while ($row = $res->fetch_assoc()) {
-									$obj->extension[]    = $row['extension'];
-									$obj->server_ip[]    = $row['server_ip'];
-									$obj->protocol[]     = $row['protocol'];
-									$obj->active[]       = $row['active'];
-									$obj->messages[]     = $row['messages'];
-									$obj->old_messages[] = $row['old_messages'];
-									$obj->fullname[]     = isset($row['fullname'])   ? $row['fullname']   : '';
-									$obj->user_group[]   = isset($row['user_group']) ? $row['user_group'] : '';
-									if (intval($row['extension']) > $maxExt) {
-										$maxExt = intval($row['extension']);
-									}
-								}
-							}
-							$obj->available_phone = $maxExt + 1;
-							$conn->close();
-							return $obj;
-						}
-						$conn->close();
-					}
-				} catch (\Exception $e) { /* ignore */ }
-				// Final empty fallback
-				$obj = new \stdClass();
-				$obj->result          = "success";
-				$obj->extension       = [];
-				$obj->active          = [];
-				$obj->messages        = [];
-				$obj->old_messages    = [];
-				$obj->protocol        = [];
-				$obj->server_ip       = [];
-				$obj->available_phone = 1001;
-				return $obj;
-			}
-			return $result;
+			return $this->API_Request("goPhones", $postfields);
 		}
 
 		public function API_getPhoneInfo($extenid){
@@ -662,82 +349,7 @@
 			$postfields = array(
 				'goAction' => 'goGetAllVoiceFiles'
 			);				
-			$remote = $this->API_Request("goVoiceFiles", $postfields);
-			$local = $this->listLocalVoiceFiles();
-
-			if (is_object($remote) && isset($remote->file_name) && is_array($remote->file_name) && count($remote->file_name) > 0) {
-				// Merge any local-only files
-				if (!empty($local->file_name)) {
-					foreach ($local->file_name as $i => $name) {
-						if (!in_array($name, $remote->file_name, true)) {
-							$remote->file_name[] = $name;
-							$remote->file_date[] = $local->file_date[$i] ?? '';
-							$remote->file_size[] = $local->file_size[$i] ?? '';
-						}
-					}
-				}
-				if (!isset($remote->result)) {
-					$remote->result = 'success';
-				}
-				return $remote;
-			}
-
-			return $local;
-		}
-
-		/**
-		 * List audio files from local sounds directories (XAMPP / offline).
-		 */
-		private function listLocalVoiceFiles() {
-			$dirs = array();
-			$docRoot = rtrim(str_replace('\\', '/', $_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
-			if ($docRoot !== '') {
-				$dirs[] = $docRoot . '/sounds';
-			}
-			$dirs[] = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'sounds';
-
-			$files = array();
-			foreach ($dirs as $dir) {
-				if (!is_dir($dir)) {
-					continue;
-				}
-				$items = @scandir($dir);
-				if (!is_array($items)) {
-					continue;
-				}
-				foreach ($items as $item) {
-					if ($item === '.' || $item === '..') {
-						continue;
-					}
-					$path = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $item;
-					if (!is_file($path)) {
-						continue;
-					}
-					$ext = strtolower(pathinfo($item, PATHINFO_EXTENSION));
-					if (!in_array($ext, array('wav', 'mp3', 'gsm', 'ulaw', 'alaw', 'ogg', 'sln', 'sln16'), true)) {
-						continue;
-					}
-					$files[$item] = $path; // de-dupe by filename
-				}
-			}
-
-			$names = array();
-			$dates = array();
-			$sizes = array();
-			ksort($files, SORT_NATURAL | SORT_FLAG_CASE);
-			foreach ($files as $name => $path) {
-				$names[] = $name;
-				$dates[] = date('Y-m-d H:i:s', @filemtime($path) ?: time());
-				$bytes = @filesize($path);
-				$sizes[] = ($bytes !== false) ? (round($bytes / 1024, 1) . ' KB') : '';
-			}
-
-			return (object) array(
-				'result' => 'success',
-				'file_name' => $names,
-				'file_date' => $dates,
-				'file_size' => $sizes,
-			);
+			return $this->API_Request("goVoiceFiles", $postfields);
 		}
 
 		/** Music On Hold API - Get all list of music on hold */
@@ -845,63 +457,7 @@
 			$postfields = array(
 				'goAction' => 'goGetCampaignsResources'
 			);		
-			$remote = $this->API_Request("goDashboard", $postfields);
-			if (is_object($remote) && !empty($remote->data) && is_array($remote->data)) {
-				return $remote;
-			}
-			// Local XAMPP fallback: active campaigns + lead counts
-			return $this->getCampaignsResourcesLocal();
-		}
-
-		/**
-		 * Dashboard campaign resources from local vicidial tables.
-		 */
-		private function getCampaignsResourcesLocal() {
-			$out = (object) array(
-				'result' => 'success',
-				'data' => array(),
-			);
-			try {
-				@include_once __DIR__ . '/Config.php';
-				$host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-				$user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-				$pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-				$port = defined('DB_PORT') ? (int) DB_PORT : 3306;
-				$dbName = defined('DB_NAME_ASTERISK') ? DB_NAME_ASTERISK : 'asterisk';
-				$mysqli = @new \mysqli($host, $user, $pass, $dbName, $port);
-				if ($mysqli->connect_errno) {
-					return $out;
-				}
-				$mysqli->set_charset('utf8mb4');
-				$sql = "SELECT c.campaign_id,
-						COALESCE(NULLIF(c.campaign_name,''), c.campaign_id) AS campaign_name,
-						COALESCE(c.local_call_time, '9am-9pm') AS local_call_time,
-						(
-							SELECT COUNT(*)
-							FROM vicidial_list vl
-							INNER JOIN vicidial_lists l ON l.list_id = vl.list_id
-							WHERE l.campaign_id = c.campaign_id
-						) AS mycnt
-					FROM vicidial_campaigns c
-					WHERE c.active = 'Y'
-					ORDER BY c.campaign_id
-					LIMIT 50";
-				$q = $mysqli->query($sql);
-				if ($q) {
-					while ($row = $q->fetch_assoc()) {
-						$out->data[] = (object) array(
-							'campaign_id' => $row['campaign_id'],
-							'campaign_name' => $row['campaign_name'],
-							'local_call_time' => $row['local_call_time'],
-							'mycnt' => (int) $row['mycnt'],
-						);
-					}
-				}
-				$mysqli->close();
-			} catch (\Throwable $e) {
-				// keep empty data
-			}
-			return $out;
+			return $this->API_Request("goDashboard", $postfields);
 		}
 
 		public function API_getCampaignsMonitoring(){
@@ -1183,35 +739,7 @@
 			$postfields = array(
 				'goAction' => 'goGetAllServers'
 			);		
-			$result = $this->API_Request("goServers", $postfields);
-			// Fallback: query asterisk DB directly if remote API unavailable
-			if (is_null($result) || empty($result)) {
-				try {
-					$db_host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT') ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'asterisk', $db_port);
-					if (!$conn->connect_error) {
-						$res = $conn->query("SELECT server_ip, server_id, server_description FROM vicidial_servers WHERE active='Y' ORDER BY server_id");
-						if ($res && $res->num_rows > 0) {
-							$obj = new \stdClass();
-							$obj->server_ip = [];
-							$obj->server_id = [];
-							$obj->server_description = [];
-							while ($row = $res->fetch_assoc()) {
-								$obj->server_ip[] = $row['server_ip'];
-								$obj->server_id[] = $row['server_id'];
-								$obj->server_description[] = $row['server_description'];
-							}
-							$conn->close();
-							return $obj;
-						}
-						$conn->close();
-					}
-				} catch (\Exception $e) { /* ignore */ }
-			}
-			return $result;
+			return $this->API_Request("goServers", $postfields);
 		}	
 		
 		public function API_getServerInfo($server_id){
@@ -1264,40 +792,7 @@
 			$postfields = array(
 				'goAction' => 'goGetAllUsers'			
 			);
-			$result = $this->API_Request("goUsers", $postfields);
-			if (is_null($result) || empty($result)) {
-				try {
-					$db_host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT') ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'goautodial', $db_port);
-					if (!$conn->connect_error) {
-						$res = $conn->query("SELECT id, name, role, status FROM users ORDER BY id");
-						if ($res && $res->num_rows > 0) {
-							$obj = new \stdClass();
-							$obj->user_id = [];
-							$obj->user = [];
-							$obj->full_name = [];
-							$obj->user_group = [];
-							$obj->user_level = [];
-							$obj->active = [];
-							while ($row = $res->fetch_assoc()) {
-								$obj->user_id[] = $row['id'];
-								$obj->user[] = $row['name'];
-								$obj->full_name[] = $row['name']; // Fallback: use name as full_name
-								$obj->user_group[] = ($row['role'] == 0) ? 'ADMIN' : 'AGENTS';
-								$obj->user_level[] = ($row['role'] == 0) ? 9 : 1;
-								$obj->active[] = ($row['status'] == 1) ? 'Y' : 'N';
-							}
-							$conn->close();
-							return $obj;
-						}
-						$conn->close();
-					}
-				} catch (\Exception $e) { /* ignore */ }
-			}
-			return $result;
+			return $this->API_Request("goUsers", $postfields);
 		}
 
 		public function API_getUserInfo($user, $filter = null, $userid = null){
@@ -1326,33 +821,7 @@
 			$postfields = array(
 				'goAction' => 'goGetAllUserGroups'
 			);
-			$result = $this->API_Request("goUserGroups", $postfields);
-			// Fallback: query asterisk DB directly if remote API unavailable
-			if (is_null($result) || empty($result)) {
-				try {
-					$db_host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT') ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'asterisk', $db_port);
-					if (!$conn->connect_error) {
-						$res = $conn->query("SELECT user_group, group_name FROM vicidial_user_groups WHERE active='Y' ORDER BY user_group");
-						if ($res && $res->num_rows > 0) {
-							$obj = new \stdClass();
-							$obj->user_group = [];
-							$obj->group_name = [];
-							while ($row = $res->fetch_assoc()) {
-								$obj->user_group[] = $row['user_group'];
-								$obj->group_name[] = $row['group_name'];
-							}
-							$conn->close();
-							return $obj;
-						}
-						$conn->close();
-					}
-				} catch (\Exception $e) { /* ignore */ }
-			}
-			return $result;
+			return $this->API_Request("goUserGroups", $postfields);
 		}
 		
 		public function API_getUserGroupInfo($group_id) {
@@ -1562,56 +1031,11 @@
 		}
 		
 		public function API_addUser($postfields){
-			$result = $this->API_Request("goUsers", $postfields);
-			if (is_null($result) || empty($result)) {
-				try {
-					$db_host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT') ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'goautodial', $db_port);
-					if (!$conn->connect_error) {
-						$user = $conn->real_escape_string($postfields['user']);
-						$pass = $conn->real_escape_string($postfields['pass']);
-						$full_name = $conn->real_escape_string($postfields['full_name']);
-						$email = $conn->real_escape_string($postfields['email']);
-						$role = 3; // Default to agent
-						if (isset($postfields['user_group']) && strtoupper($postfields['user_group']) === 'ADMIN') {
-							$role = 0; // Admin role
-						}
-						$status = 1;
-						$pass_options = [ 'cost' => 10 ];
-						$password_hash = password_hash($pass, PASSWORD_BCRYPT, $pass_options);
-						
-						$sql = "INSERT INTO users (name, password_hash, email, creation_date, role, status) VALUES ('$user', '$password_hash', '$email', NOW(), $role, $status)";
-						$obj = new \stdClass();
-						if ($conn->query($sql) === TRUE) {
-							$obj->result = "success";
-						} else {
-							$obj->result = "error";
-							$obj->data = "DB Error: " . $conn->error;
-						}
-						$conn->close();
-						return $obj;
-					}
-				} catch (\Exception $e) { /* ignore */ }
-				
-				$obj = new \stdClass();
-				$obj->result = "error";
-				$obj->data = "Could not connect to database.";
-				return $obj;
-			}
-			return $result;
+			return $this->API_Request("goUsers", $postfields);
 		}
 
 		public function API_addPhones($postfields){
-			$result = $this->API_Request("goPhones", $postfields);
-			if (is_null($result) || empty($result)) {
-				$obj = new \stdClass();
-				$obj->result = "success";
-				return $obj;
-			}
-			return $result;
+			return $this->API_Request("goPhones", $postfields);
 		}
 
 		public function API_editPhone($postfields){
@@ -1663,36 +1087,7 @@
 		}
 
 		public function API_checkUser($postfields){
-			$result = $this->API_Request("goUsers", $postfields);
-			// Fallback: query goautodial DB directly if remote API unavailable
-			if (is_null($result) || empty($result)) {
-				try {
-					$db_host = defined('DB_HOST') ? DB_HOST : '127.0.0.1';
-					$db_user = defined('DB_USERNAME') ? DB_USERNAME : 'root';
-					$db_pass = defined('DB_PASSWORD') ? DB_PASSWORD : '';
-					$db_port = defined('DB_PORT') ? intval(DB_PORT) : 3306;
-					$conn = @new \mysqli($db_host, $db_user, $db_pass, 'goautodial', $db_port);
-					if (!$conn->connect_error) {
-						$user = $conn->real_escape_string($postfields['user']);
-						$res = $conn->query("SELECT name FROM users WHERE name='$user'");
-						$obj = new \stdClass();
-						if ($res && $res->num_rows > 0) {
-							$obj->result = "error";
-							$obj->data = "user";
-						} else {
-							$obj->result = "success";
-						}
-						$conn->close();
-						return $obj;
-					}
-				} catch (\Exception $e) { /* ignore */ }
-				
-				// If even DB check fails, default to success to unblock UI
-				$obj = new \stdClass();
-				$obj->result = "success";
-				return $obj;
-			}
-			return $result;
+			return $this->API_Request("goUsers", $postfields);
 		}
 
 		public function API_list($postfields){
@@ -1855,15 +1250,15 @@
 		public function API_WhatsAppSend($phone, $body){
 			$curl = curl_init();
 			curl_setopt_array($curl, array(
-			CURLOPT_URL => "https://us-central1-whatsapp-center.cloudfunctions.net/api/sendMessage?user=eu149&token=onckywrgvyoz2egw&instance=159360",
+			CURLOPT_URL => RuntimeConfig::url('WHATSAPP_SEND_URL'),
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_ENCODING => "",
 			CURLOPT_MAXREDIRS => 10,
-			CURLOPT_TIMEOUT => 0,
-			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_FOLLOWLOCATION => false,
 			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
 			CURLOPT_CUSTOMREQUEST => "POST",
-			CURLOPT_POSTFIELDS =>"{\r\n  \"phone\": $phone,\r\n  \"body\": \"$body\"\r\n}",
+			CURLOPT_POSTFIELDS => json_encode(array('phone' => $phone, 'body' => $body)),
 			CURLOPT_HTTPHEADER => array(
 			    "Content-Type: text/plain"
 			  ),
@@ -1883,15 +1278,15 @@
 			$callbackURL = $getSettings->callback_url;
 			$curl = curl_init();
 			curl_setopt_array($curl, array(
-			CURLOPT_URL => "https://us-central1-whatsapp-center.cloudfunctions.net/api/webhook?user=eu149&token=onckywrgvyoz2egw&instance=159360",
+			CURLOPT_URL => RuntimeConfig::url('WHATSAPP_WEBHOOK_URL'),
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_ENCODING => "",
 			CURLOPT_MAXREDIRS => 10,
-			CURLOPT_TIMEOUT => 0,
-			CURLOPT_FOLLOWLOCATION => true,
+			CURLOPT_TIMEOUT => 30,
+			CURLOPT_FOLLOWLOCATION => false,
 			CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
 			CURLOPT_CUSTOMREQUEST => "POST",
-			CURLOPT_POSTFIELDS =>"{\r\n  \"webhookUrl\": \"$callbackURL\"\r\n}",
+			CURLOPT_POSTFIELDS => json_encode(array('webhookUrl' => $callbackURL)),
 			CURLOPT_HTTPHEADER => array(
 			  "Content-Type: text/plain"
 			),

@@ -1,5 +1,12 @@
 {
-  "name": "Creamy",
+  "name": "goautodial/web-interface",
+  "require": {
+    "php": "^8.3",
+    "ext-curl": "*",
+    "ext-openssl": "*",
+    "ext-mysqli": "*",
+    "phpmailer/phpmailer": "7.1.1"
+  },
   "description": "Creamy -- A lightweight, minimalist and open source CRM in PHP.",
   "homepage": "http://creamycrm.com/",
   "keywords": [

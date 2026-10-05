@@ -1,0 +1,50 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>DEPLOYMENT FIXES</title><style>body{font:11pt/1.5 Arial,sans-serif;max-width:1000px;margin:32px auto;padding:0 24px;color:#17212a}h1,h2,h3{line-height:1.2}pre{white-space:pre-wrap;background:#f2f5f7;padding:12px}code{font:9pt Consolas,monospace;overflow-wrap:anywhere}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:8px;text-align:left}th{background:#edf3f7}a{color:#17527e}@media print{@page{size:A4;margin:16mm}body{margin:0;padding:0}h2,h3{break-after:avoid}pre,tr{break-inside:avoid}}</style></head><body><h1>Pre-deployment fixes</h1>
+<p>Updated 5 October 2026. Changes apply to the web application in this checkout. The complete telephony backend is a separate dependency.</p>
+<h2>What changed</h2>
+<ul>
+<li>Removed the failed-login administrator fallback and anonymous debug privileges. Invalid credentials, malformed backend responses, disabled users and backend outages cannot authenticate through that fallback.</li>
+<li>Corrected email login and normalized upstream <code>userno</code> responses. Replaced PHP&#x27;s ignored custom bcrypt salt option with a compatibility helper for existing truncated backend hashes.</li>
+<li>Added shared authentication, role and CSRF checks to executable PHP entrypoints. User/server/system settings mutations require administrator access. Other management endpoints allow staff; agent endpoints use an explicit allowlist. The backend must still enforce group, tenant and record permissions.</li>
+<li>Added same-origin CSRF integration for forms, XHR and fetch, and made logout a POST operation that clears the session and cookie. Restricted self-service password/avatar updates; event deletion is now scoped to its owner and message senders come from the session.</li>
+<li>Replaced the hardcoded session cipher with authenticated AES-256-GCM encryption and a configured key. Database session reads fail closed and writes report errors. Legacy sessions are invalidated; everyone must sign in again after this release.</li>
+<li>Enabled TLS certificate verification for outgoing requests, including SMTP. Shared API requests have bounded timeouts and reject unsuccessful HTTP responses. API payloads cannot replace server-supplied identity fields; legacy requests also use the signed-in user&#x27;s credentials.</li>
+<li>Routed browser agent/monitor API calls through local authenticated proxies. Encoded agent JavaScript strings, removed redundant account password/hash fields and external password query parameters, cleared local testing URL defaults, and restricted the legacy SIP page to configured destinations. Browser SIP credentials remain necessary for registration.</li>
+<li>Validated avatars using image content, constrained sizes, and rejected SVG/executable payloads. Replaced attachment paths derived from filenames with random names; attachments are served as downloads. Company logo uploads now use the persistent uploads directory.</li>
+<li>Added environment/protected-file configuration and removed active default database/API credentials. Disabled HTTP installers/reset scripts; development resets require an explicit CLI flag and a supplied administrator password.</li>
+<li>Added Apache restrictions for private files, libraries, maintenance tools and executable uploads. Code remains read-only to the web service account in the image.</li>
+<li>Added PHP 8.3 Docker build/configuration, required secret substitutions, persistent asset volumes, database health checks and private database networking. Compose now selects MariaDB 10.11; existing databases require a reviewed upgrade and backup plan.</li>
+<li>Added a modern Composer PHPMailer dependency and loader to replace references to absent legacy library files. Corrected PHP 8 parameter deprecations and a GD image logging error.</li>
+<li>Added <code>bin/preflight.php</code> for read-only runtime, configuration, database and backend checks, with redacted output.</li>
+</ul>
+<h2>Configuration and intentional behavior changes</h2>
+<p>Copy <code>config/production.php.example</code> outside the application, normally to <code>/etc/goautodial/production.php</code>, fill real values, and set <code>GOAUTODIAL_CONFIG_FILE</code> in PHP FPM and every CLI job. See <code>deployment/php-fpm-pool.conf.example</code>. Do not replace the committed configuration loaders with old include stubs. Environment variables override file values, including empty values.</p>
+<p>Required settings include HTTPS <code>APP_URL</code> and <code>GO_API_URL</code>, API login credentials, all three database connections, database sessions and a 64-character hexadecimal <code>SESSION_ENCRYPTION_KEY</code>. Serve at the domain root. A reverse proxy must preserve Host and forward HTTPS only from an address explicitly listed in <code>TRUSTED_PROXIES</code>.</p>
+<p>SMTP encryption settings must match the backend&#x27;s encryption format and keys. Do not copy old public example keys into production. The optional legacy <code>modules/GOagent/jsSIP.php</code> page now uses <code>SIP_DOMAIN</code>, <code>SIP_WS_HOST</code> and <code>SIP_WS_PORT</code>. External integrations that depended on account passwords in URLs need a separate authentication mechanism. Stricter role checks may require updating intended staff workflows rather than weakening authorization.</p>
+<h2>Local validation</h2>
+<ul>
+<li>Security regression suite: <strong>60 checks passed</strong>, covering authentication failures, bcrypt compatibility, permission failure behavior, session encryption/storage failures, CSRF, proxy trust, avatar content and upload paths.</li>
+<li>HTTP request-guard suite: <strong>33 checks passed</strong> against a loopback PHP test server, covering unauthenticated requests, roles, CSRF, methods, module actions and message sender spoofing.</li>
+<li>API transport/identity tests passed with dummy credentials and a local fixture server, including URL encoding, multipart requests and failure handling.</li>
+<li>Browser CSRF integration tests passed for XHR, fetch, forms and logout.</li>
+<li>Docker Compose configuration validates with dummy deployment values. The local Docker client warns that its user configuration file is inaccessible.</li>
+<li><strong>327 PHP files passed syntax checks without warnings</strong>; the entrypoint scan found no missing guards among first-party executable endpoints, and the PHP TLS scan found no disabled verification.</li>
+</ul>
+<p>Run the checks on Linux with PHP 8.3 and the extensions installed:</p>
+<pre><code>php tests/security_test.php
+node tests/security_client_test.cjs
+# Separate terminal; development test fixture only, bound to loopback:
+php -S 127.0.0.1:8097 tests/http_guard_router.php
+php tests/http_guard_test.php
+php tests/api_client_test.php</code></pre>
+<p>Stop the test server afterwards. Fixtures do not execute full management workflows or connect to a real database. Database session behavior is tested with an in-memory stub, not a live MariaDB server.</p>
+<h2>Still required before launch</h2>
+<ol>
+<li>Supply and rotate real credentials, certificates and protected settings; import the complete matching schemas. Back up database/asset volumes before upgrading existing data.</li>
+<li>Install/review Composer dependencies and the lockfile, audit them, and build the Linux image. Composer is not installed locally and the Docker daemon is unavailable; these steps were not executed here.</li>
+<li>Run <code>php bin/preflight.php</code> as the web service user with production settings. <code>--offline</code> checks configuration only and is not evidence of launch readiness. This Windows environment has PHP 8.2 and incomplete extensions, so production preflight deliberately fails here.</li>
+<li>Test the actual goAPIv2 release: username/email login, bcrypt/plain-password conventions, group/tenant restrictions, password changes, session persistence, logout, campaigns, reports, lead imports and enabled email/integration features.</li>
+<li>Verify Apache restrictions and HTTPS/proxy behavior on the Linux server, add login rate limiting at the gateway, and test backup restoration and service recovery.</li>
+<li>Verify SIP/WSS registration, inbound/outbound calls, two-way audio, hold/transfer/dispositions and recordings against the real Asterisk/Kamailio/RTPengine installation.</li>
+</ol>
+<p>This pass resolves the identified code/configuration blockers; it is not a complete penetration test or a certification that every legacy workflow is safe. Public access and live dialing should follow staging acceptance.</p>
+<p>References used for compatibility: <a href="https://github.com/goautodial/goAPIv2/blob/master/goUsers/goUserLogin.php">upstream login response</a>, <a href="https://github.com/PHPMailer/PHPMailer">PHPMailer installation</a>, <a href="https://www.php.net/manual/en/function.crypt.php">PHP crypt</a>.</p></body></html>

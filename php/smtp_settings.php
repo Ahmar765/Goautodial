@@ -1,9 +1,7 @@
 <?php
 
 	require_once('goCRMAPISettings.php');
-	require_once('../phpmailer/PHPMailerAutoload.php');
-	require_once('../phpmailer/class.phpmailer.php');
-	require_once('../phpmailer/class.smtp.php');
+	require_once __DIR__ . '/MailerBootstrap.php';
 	require_once('APIHandler.php');
 //      include_once('../phpmailer/info.php');
         $api = \creamy\APIHandler::getInstance();
@@ -13,11 +11,11 @@
 
                 $output = $api->API_Request("goSMTP", $postfields);	
 		
-		if($output->result == "success"){
+		if(is_object($output) && ($output->result ?? '') == "success"){
 			date_default_timezone_set($output->data->timezone);
 			
 			//Create a new PHPMailer instance
-			$mail = new PHPMailer;
+			$mail = new \PHPMailer\PHPMailer\PHPMailer;
 			
 			//Tell PHPMailer to use SMTP
 			$mail->isSMTP();
@@ -26,7 +24,7 @@
 			// 0 = off (for production use)
 			// 1 = client messages
 			// 2 = client and server messages
-			$mail->SMTPDebug = $output->data->debug;
+			$mail->SMTPDebug = 0;
 			
 			//Ask for HTML-friendly debug output
 			$mail->Debugoutput = 'html';
@@ -34,7 +32,7 @@
 			if($output->data->ipv6_support == 1)
 				$mail->Host = $output->data->host; //Set the hostname of the mail server
 			else
-				$mail->Host = gethostbyname($output->data->host); // if your network does not support SMTP over IPv6
+				$mail->Host = $output->data->host; // Retain hostname for certificate validation.
 			
 			//Set the SMTP port number - 587 for authenticated TLS, a.k.a. RFC4409 SMTP submission
 			$mail->Port = $output->data->port;
@@ -61,8 +59,8 @@
 	        //$output = false;
 
         	$encrypt_method = "AES-256-CBC";
-	        $secret_key = 'This is my secret key';
-        	$secret_iv = 'This is my secret iv';
+	        $secret_key = \creamy\RuntimeConfig::required('SMTP_ENCRYPTION_SECRET');
+        	$secret_iv = \creamy\RuntimeConfig::required('SMTP_ENCRYPTION_IV_SECRET');
 
         	// hash
 	        $key = hash('sha256', $secret_key);

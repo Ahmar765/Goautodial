@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getLeads.php
  * @brief       Handles requests for displaying leads in the CRM

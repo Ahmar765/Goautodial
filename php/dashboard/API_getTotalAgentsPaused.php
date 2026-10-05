@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getTotalAgentsPaused.php
  * @brief       Displays the total number of paused agents

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getRealtimeAgentsMonitoring.php
  * @brief       Displays realtime calls monitoring data and HTML

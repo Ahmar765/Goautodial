@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ViewImage.php
  * @brief       View image from database
@@ -30,10 +32,13 @@
 	if (is_array($image)) {
 		ob_clean();
 		
-		header('Content-type: '.$image['type']);
-		echo base64_decode($image['data']);
+		require_once __DIR__ . '/AvatarImage.php';
+        $avatar = \creamy\AvatarImage::decode($image['data']);
+        if ($avatar === null) { \creamy\Security::deny(404, 'Avatar unavailable.'); }
+		header('Content-type: '.$avatar['type']);
+		echo base64_decode($avatar['data'], true);
 	} else {
-		$img = '../img/avatars/default/defaultAvatar.png';
+		$img = __DIR__ . '/../img/avatars/default/defaultAvatar.png';
 		header('Content-Type: image/png');
 		readfile($img);
 	}

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        GetListsStatuses.php
  * @brief       Handles List Statuses Requests

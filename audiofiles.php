@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 /**
  * @file        telephonyaudiofiles.php
  * @brief       Manage audio files
@@ -82,25 +84,11 @@
 
                 <!-- Main content -->
                 <section class="content">
-                <?php if (($perm->voicefiles->voicefiles_play ?? 'Y') !== 'N' || ($perm->moh->moh_read ?? 'Y') !== 'N') { ?>
+                <?php if ($perm->voicefiles->voicefiles_play !== 'N' || $perm->moh->moh_read !== 'N') { ?>
 
 			<div class="panel panel-default">
 				<div class="panel-body">
-					<legend>
-						<?php $lh->translateText("audiofiles"); ?>
-						<span class="pull-right" style="margin-top: -6px;">
-							<?php if (($perm->voicefiles->voicefiles_upload ?? 'Y') !== 'N') { ?>
-								<button type="button" class="btn btn-primary btn-sm js-open-audio-modal" data-target="#form-voicefiles-modal">
-									<i class="fa fa-plus"></i> Upload Voice File
-								</button>
-							<?php } ?>
-							<?php if (($perm->moh->moh_create ?? 'Y') !== 'N') { ?>
-								<button type="button" class="btn btn-info btn-sm js-open-audio-modal" data-target="#moh-wizard">
-									<i class="fa fa-plus"></i> Add Music On-Hold
-								</button>
-							<?php } ?>
-						</span>
-					</legend>
+					<legend><?php $lh->translateText("audiofiles"); ?></legend>
 
 		            <div role="tabpanel">
 
@@ -111,13 +99,12 @@
 						$toggleMOH = '';
 						$activeVoicefiles = ' active';
 						$activeMOH = '';
-						// Keep Voice Files tab visible for local/admin even if upload flag is missing
-						if (($perm->voicefiles->voicefiles_play ?? 'Y') === 'N' && ($perm->voicefiles->voicefiles_upload ?? 'Y') === 'N') {
+						if ($perm->voicefiles->voicefiles_upload === 'N') {
 							$toggleVoicefiles = ' class="hidden"';
 							$activeVoicefiles = '';
 						}
-						if (($perm->moh->moh_read ?? 'Y') === 'N' && ($perm->moh->moh_create ?? 'Y') === 'N') { $toggleMOH = ' class="hidden"'; }
-						if (($perm->moh->moh_read ?? 'Y') !== 'N' && ($perm->voicefiles->voicefiles_play ?? 'Y') === 'N' && ($perm->voicefiles->voicefiles_upload ?? 'Y') === 'N') {
+						if ($perm->moh->moh_create === 'N') { $toggleMOH = ' class="hidden"'; }
+						if ($perm->moh->moh_create !== 'N' && $perm->voicefiles->voicefiles_upload === 'N') {
 							$toggleMOH = ' class="active"';
 							$activeMOH = ' active';
 						}
@@ -163,7 +150,7 @@
 								}
 							?>
 
-						<div class="bottom-menu skin-blue<?php if (($perm->voicefiles->voicefiles_upload ?? 'Y') == 'N' && ($perm->moh->moh_create ?? 'Y') == 'N') { echo " hidden"; } ?>">
+						<div class="bottom-menu skin-blue<?php if ($perm->voicefiles->voicefiles_upload == 'N' && $perm->moh->moh_create == 'N') { echo " hidden"; } ?>">
 							<div class="action-button-circle" data-toggle="modal">
 								<?php print $ui->getCircleButton("inbound", "plus"); ?>
 							</div>
@@ -173,11 +160,11 @@
 								$menuHeight = '170px';
 								$hideVoicefiles = '';
 								$hideMOH = '';
-								if (($perm->voicefiles->voicefiles_upload ?? 'Y') === 'N') {
+								if ($perm->voicefiles->voicefiles_upload === 'N') {
 									$menu--;
 									$hideVoicefiles = ' hidden';
 								}
-								if (($perm->moh->moh_create ?? 'Y') === 'N') {
+								if ($perm->moh->moh_create === 'N') {
 									$menu--;
 									$hideMOH = ' hidden';
 								}
@@ -199,19 +186,10 @@
 
 <?php
  /*
-  * APIs needed for form — tolerate goAPI offline
+  * APIs needed for form
   */
    $user_groups = $api->API_getAllUserGroups();
-   if (!is_object($user_groups) || !isset($user_groups->user_group) || !is_array($user_groups->user_group)) {
-	   $user_groups = (object) array(
-		   'user_group' => array('ADMIN'),
-		   'group_name' => array('Administrators'),
-	   );
-   }
-   $audio_files = $api->API_getAllVoiceFiles();
-   if (!is_object($audio_files) || !isset($audio_files->file_name) || !is_array($audio_files->file_name)) {
-	   $audio_files = (object) array('file_name' => array());
-   }
+   $audio_files = $api->API_getAllVoiceFiles(); 
 ?>
 <!-- MOH MODALS -->
 	<!-- Modal -->
@@ -249,10 +227,9 @@
 					<select name="user_group" class="form-control moh_user_group select2-1" style="width:100%;" <?=($perm->moh->moh_update === 'N' ? 'disabled' : '')?>/>
 						<option value="---ALL---">  ALL USER GROUPS  </option>
 						<?php
-                            $ugCount = is_array($user_groups->user_group) ? count($user_groups->user_group) : 0;
-                            for($i=0;$i<$ugCount;$i++){
+                            for($i=0;$i<count($user_groups->user_group);$i++){
                         ?>
-                            <option value="<?php echo htmlspecialchars($user_groups->user_group[$i]);?>">  <?php echo htmlspecialchars($user_groups->user_group[$i].' - '.$user_groups->group_name[$i]);?>  </option>
+                            <option value="<?php echo $user_groups->user_group[$i];?>">  <?php echo $user_groups->user_group[$i].' - '.$user_groups->group_name[$i];?>  </option>
                         <?php
                             }
                         ?>
@@ -274,11 +251,10 @@
 					<select class="form-control moh_filename  select2-1" name="filename" style="width:100%;">
                                                 <option value="conf">  conf  </option>
 						<?php
-						$afCount = (isset($audio_files->file_name) && is_array($audio_files->file_name)) ? count($audio_files->file_name) : 0;
-						for($i=0;$i<$afCount;$i++){
+						for($i=0;$i<count($audio_files->file_name);$i++){
 							$file = substr($audio_files->file_name[$i], 0, strrpos($audio_files->file_name[$i], "."));
 						?>
-							<option value="<?php echo htmlspecialchars($file);?>">  <?php echo htmlspecialchars($file); ?>  </option>
+							<option value="<?php echo $file;?>">  <?php echo $file; ?>  </option>
 	    		<?php
            		    }		
             		?>
@@ -361,9 +337,9 @@
 	                                	<option value="---ALL---">  ALL USER GROUPS  </option>
 	                                 <?php
 												}
-	                                    for($i=0;$i<(is_array($user_groups->user_group) ? count($user_groups->user_group) : 0);$i++){
+	                                    for($i=0;$i<count($user_groups->user_group);$i++){
 	                                 ?>
-	                                    <option value="<?php echo htmlspecialchars($user_groups->user_group[$i]);?>">  <?php echo htmlspecialchars($user_groups->user_group[$i].' - '.$user_groups->group_name[$i]);?>  </option>
+	                                    <option value="<?php echo $user_groups->user_group[$i];?>">  <?php echo $user_groups->user_group[$i].' - '.$user_groups->group_name[$i];?>  </option>
 	                                    <?php
 	                                    }
 	                                    ?>
@@ -385,10 +361,10 @@
                                         <select class="form-control select2-1" name="filename" style="width:100%;">
                                                 <option value="conf">  conf  </option>
                                                 <?php
-                                                for($i=0;$i<(isset($audio_files->file_name) && is_array($audio_files->file_name) ? count($audio_files->file_name) : 0);$i++){
+                                                for($i=0;$i<count($audio_files->file_name);$i++){
 							$file = substr($audio_files->file_name[$i], 0, strrpos($audio_files->file_name[$i], "."));
                                                 ?>
-                                                        <option value="<?php echo htmlspecialchars($file);?>">  <?php echo htmlspecialchars($file); ?>  </option>
+                                                        <option value="<?php echo $file;?>">  <?php echo $file; ?>  </option>
 
                         <?php
                             }
@@ -518,17 +494,6 @@
 
  <script type="text/javascript">
 	$(document).ready(function() {
-		$(document).on('click', '.js-open-audio-modal, [data-target="#form-voicefiles-modal"], [data-target="#moh-wizard"]', function(e) {
-			var target = $(this).attr('data-target') || $(this).data('target');
-			if (!target) return;
-			e.preventDefault();
-			var $m = $(target);
-			if (!$m.length) {
-				swal('Error', 'Modal ' + target + ' was not found on the page.', 'error');
-				return;
-			}
-			$m.modal('show');
-		});
 
 		/*******************
 		** INITIALIZATIONS

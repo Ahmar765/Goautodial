@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteMOH.php
  * @brief       Handles Delete Music On Hold Requests

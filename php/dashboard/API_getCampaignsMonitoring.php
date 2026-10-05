@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../RequestGuard.php';
+
 /**
  * @file        API_getCampaignsMonitoring.php
  * @brief       Displays campaigns with < 100 leads in hopper
@@ -27,7 +29,7 @@
 	$max 										= 0;
 	$jsonv 										= '['; 	
 
-    if (is_null($output) || is_null($output->data) || count($output->data) < 1){
+    if (count($output->data) < 1){
         echo  "No data available";
 
     } elseif (!empty($output->data)) {

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ExportAgentDetails.php
  * @brief       Handles Exporting of Agent Details Report Requests

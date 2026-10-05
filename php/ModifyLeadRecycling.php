@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        ModifyLeadRecycling.php
  * @brief       Handles modifying lead recycling requests

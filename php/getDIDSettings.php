@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        getDIDSettings.php
  * @brief       Handles DID information requests

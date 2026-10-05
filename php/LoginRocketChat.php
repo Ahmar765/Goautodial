@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        LoginRocketChat.php
  * @brief       Logs in user to rocketchat

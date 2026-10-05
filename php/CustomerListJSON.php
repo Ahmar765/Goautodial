@@ -24,6 +24,8 @@
 */
 
 namespace creamy;
+require_once __DIR__ . '/RequestGuard.php';
+
 
 // dependencies
 require_once('CRMDefaults.php');

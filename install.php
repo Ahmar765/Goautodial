@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/php/RequestGuard.php';
+
 	/**
 		The MIT License (MIT)
 		
@@ -24,7 +26,7 @@
 	*/
 
 	error_reporting(E_ALL);
-	ini_set('display_errors', 1);
+	ini_set('display_errors', '0');
 	
 	require_once('./php/CRMDefaults.php');
 	require_once('./php/DbInstaller.php');

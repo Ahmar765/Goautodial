@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 ###########################################################
 ### Name: SaveImage.php                                 ###
 ### Functions: Save image to the database               ###
@@ -13,9 +15,12 @@ require_once('DbHandler.php');
 
 $db = new \creamy\DbHandler();
 
-$uid  = $_REQUEST['user_id'];
-$type = $_REQUEST['type'];
-$image = $_REQUEST['image'];
+$uid = $_POST['user_id'] ?? '';
+require_once __DIR__ . '/AvatarImage.php';
+$avatar = \creamy\AvatarImage::decode($_POST['image'] ?? null);
+if ($avatar === null) { \creamy\Security::deny(400, 'A PNG, JPEG or GIF avatar under 2 MB is required.'); }
+$type = $avatar['type'];
+$image = $avatar['data'];
 
 $uploaded = $db->saveUserAvatar($uid, $type, $image);
 

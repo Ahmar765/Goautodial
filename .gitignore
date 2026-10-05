@@ -1,17 +1,15 @@
-# Secrets and local-only config (never commit)
+# Configuration loaders contain no secrets and should be versioned.
 .env
-linux/server.env
-php/Config.local.php
+vendor/
+node_modules/
+.env.*
+!.env.example
+config/local.php
+tmp/
+uploads/*
+!uploads/.htaccess
+img/avatars/*
+!img/avatars/.htaccess
+!img/avatars/default/
 astguiclient.conf
 goautodial.conf
-
-# OS / editor junk
-.DS_Store
-Thumbs.db
-*.swp
-*~
-
-# Temp / build
-*.tgz
-*.tar.gz
-goautodial-deploy.tgz

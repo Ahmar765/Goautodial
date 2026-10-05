@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/RequestGuard.php';
+
 /**
  * @file        DeleteHotkey.php
  * @brief       Handles Delete Hotkey Request
