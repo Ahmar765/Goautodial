@@ -58,7 +58,26 @@ services:
     volumes:
       - goautodial-db-data:/var/lib/mysql
 
+  # Telephony core configured to use host networking
+  # to avoid SIP/RTP one-way audio and NAT issues
+  asterisk:
+    image: andrius/asterisk:latest # Example Asterisk image, adjust to your exact Goautodial Vicidial build if available
+    restart: unless-stopped
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+      - SYS_NICE
+    volumes:
+      - goautodial-asterisk-etc:/etc/asterisk
+      - goautodial-asterisk-lib:/var/lib/asterisk
+      - goautodial-asterisk-spool:/var/spool/asterisk
+      - goautodial-asterisk-log:/var/log/asterisk
+
 volumes:
   goautodial-db-data:
   goautodial-uploads:
   goautodial-avatars:
+  goautodial-asterisk-etc:
+  goautodial-asterisk-lib:
+  goautodial-asterisk-spool:
+  goautodial-asterisk-log:
