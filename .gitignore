@@ -1,15 +1,2 @@
 # Configuration loaders contain no secrets and should be versioned.
-.env
-vendor/
 node_modules/
-.env.*
-!.env.example
-config/local.php
-tmp/
-uploads/*
-!uploads/.htaccess
-img/avatars/*
-!img/avatars/.htaccess
-!img/avatars/default/
-astguiclient.conf
-goautodial.conf
