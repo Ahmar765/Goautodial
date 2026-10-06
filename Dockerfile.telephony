@@ -1,0 +1,45 @@
+FROM almalinux:9
+
+# 1. Update and Enable Repositories
+RUN dnf -y update \
+ && dnf -y install epel-release dnf-plugins-core \
+ && dnf -y install https://rpms.remirepo.net/enterprise/remi-release-9.rpm \
+ && dnf -y install https://download1.rpmfusion.org/free/el/rpmfusion-free-release-9.noarch.rpm \
+ && dnf config-manager --set-enabled crb \
+ && dnf config-manager --add-repo https://rpm.kamailio.org/centos/kamailio.repo \
+ && dnf -y module enable php:remi-7.4
+
+# 2. Install Dependencies and Development Tools
+RUN dnf -y groupinstall "Development Tools" \
+ && dnf -y install kamailio kamailio-mysql kamailio-websocket kamailio-utils kamailio-tls kamailio-ims kamailio-json \
+    php-mysqlnd php-mcrypt php-devel php-mbstring php-common php-xml php-pear php-cli php-imap php-fpm php-gd php-opcache php-pdo php-process php php-intl php-sodium php-xmlrpc \
+    lame screen crontabs net-tools wget nano cpan unzip make patch gcc gcc-c++ rsync curl ImageMagick sox sendmail htop iftop subversion libpri dkms \
+    mariadb-devel gd-devel readline-devel curl-devel newt-devel libxml2-devel sqlite-devel libuuid-devel lame-devel libsrtp-devel dahdi-tools-devel jansson-devel opus-devel libedit-devel portaudio-devel libpri-devel gsm-devel speex-devel \
+    perl-CPAN perl-YAML perl-CPAN-DistnameInfo perl-libwww-perl perl-DBI perl-DBD-MySQL perl-GD perl-Env perl-Term-ReadLine-Gnu perl-SelfLoader perl-open.noarch perl-Net-Server perl-File-Touch perl-Switch perl-Time-Local perl-DBD-mysql perl-Crypt-Eksblowfish perl-File-Which perl-Net-Telnet
+
+# 3. Install RTPengine (User-space only, ignoring DKMS kernel modules for Docker compatibility)
+RUN mkdir -p /usr/src/ && cd /usr/src/ \
+ && wget -c https://downloads2.goautodial.org/almalinux/files/RPMS/x86_64/ngcp-rtpengine-11.5.1.49+0~mr11.5.1.49-1.el9.x86_64.rpm \
+ && dnf -y localinstall ngcp-rtpengine-11.5.1.49+0~mr11.5.1.49-1.el9.x86_64.rpm || true
+
+# 4. Compile and Install Asterisk-vici
+RUN cd /usr/src \
+ && wget -c https://downloads2.goautodial.org/almalinux/files/asterisk-18.21.0-vici.tar.gz \
+ && tar zxvf asterisk-18.21.0-vici.tar.gz \
+ && cd asterisk-18.21.0-vici \
+ && ./configure --libdir=/usr/lib64 --with-gsm=internal --enable-opus --enable-srtp --with-ssl --enable-asteriskssl --with-pjproject-bundled --with-jansson-bundled \
+ && make menuselect/menuselect \
+ && make menuselect-tree \
+ && make menuselect.makeopts \
+ && menuselect/menuselect --enable app_meetme menuselect.makeopts \
+ && make all \
+ && make install \
+ && make samples
+
+# 5. Install GOautodial CE RPM
+RUN cd /usr/src/ \
+ && wget -c https://downloads2.goautodial.org/almalinux/files/RPMS/noarch/goautodial-ce-4.0-1768410003.noarch.rpm \
+ && dnf -y localinstall goautodial-ce-4.0-1768410003.noarch.rpm
+
+# Start asterisk in the foreground
+CMD ["/usr/sbin/asterisk", "-f", "-vvv"]

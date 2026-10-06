@@ -61,7 +61,10 @@ services:
   # Telephony core configured to use host networking
   # to avoid SIP/RTP one-way audio and NAT issues
   asterisk:
-    image: andrius/asterisk:latest # Example Asterisk image, adjust to your exact Goautodial Vicidial build if available
+    build:
+      context: .
+      dockerfile: Dockerfile.telephony
+    image: goautodial-telephony:local
     restart: unless-stopped
     network_mode: "host"
     cap_add:
