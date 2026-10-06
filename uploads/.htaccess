@@ -1,0 +1,9 @@
+Options -Indexes
+<FilesMatch "(?i)\.(php[0-9]*|phtml|phar)(?:\.|$)">
+    Require all denied
+</FilesMatch>
+<IfModule mod_headers.c>
+    <FilesMatch "^(?!customCompanyLogo\.png$).+">
+        Header always set Content-Disposition "attachment"
+    </FilesMatch>
+</IfModule>

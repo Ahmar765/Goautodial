@@ -1,0 +1,6 @@
+[04-Oct-2026 23:27:11 UTC] PHP Fatal error:  Uncaught RuntimeException: FAIL: Legacy hash compatible with standard bcrypt verification in C:\Users\AiBit\Desktop\v4.0-master\v4.0-master\tests\security_test.php:16
+Stack trace:
+#0 C:\Users\AiBit\Desktop\v4.0-master\v4.0-master\tests\security_test.php(42): check(false, 'Legacy hash com...')
+#1 {main}
+  thrown in C:\Users\AiBit\Desktop\v4.0-master\v4.0-master\tests\security_test.php on line 16
+[04-Oct-2026 23:28:30 UTC] GOautodial session storage write failed.
