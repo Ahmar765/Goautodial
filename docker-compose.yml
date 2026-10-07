@@ -16,7 +16,7 @@
       DB_USER: ${DB_USER:?Set DB_USER}
       DB_PASS: ${DB_PASS:?Set DB_PASS}
       DB_NAME: goautodial
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-development}
       APP_URL: ${APP_URL:?Set APP_URL}
       GO_API_URL: ${GO_API_URL:?Set GO_API_URL}
       GO_API_USER: ${GO_API_USER:?Set GO_API_USER}
