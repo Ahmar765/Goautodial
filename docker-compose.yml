@@ -1,10 +1,10 @@
-services:
+﻿services:
   web:
     build: .
     image: goautodial-web:local
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:80"
+      - "8080:80"
     volumes:
       - goautodial-uploads:/var/www/html/uploads
       - goautodial-avatars:/var/www/html/img/avatars
@@ -45,6 +45,8 @@ services:
   db:
     image: mariadb:10.11
     restart: unless-stopped
+    ports:
+      - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}
       MYSQL_DATABASE: goautodial
