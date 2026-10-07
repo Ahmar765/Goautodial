@@ -1,8 +1,8 @@
-<?php
+﻿<?php
 require_once __DIR__ . '/RuntimeConfig.php';
 require_once __DIR__ . '/Security.php';
 define('gourl', \creamy\RuntimeConfig::url('GO_API_URL'));
-// Legacy direct requests must use the signed-in user's permissions too.
+
 $apiAccount = PHP_SAPI === 'cli' ? array(
     \creamy\RuntimeConfig::required('GO_API_USER'), \creamy\RuntimeConfig::required('GO_API_PASSWORD'))
     : (\creamy\Security::authenticated($_SESSION ?? array()) ? array($_SESSION['user'], $_SESSION['phone_this'] ?? '') : array('', ''));
