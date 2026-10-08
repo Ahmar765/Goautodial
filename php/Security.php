@@ -122,6 +122,10 @@ final class Security
             self::deny(405, 'POST is required for module actions.');
         }
         if ($method === 'POST' && !self::validCsrf($_SESSION, $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($_POST['_csrf'] ?? null))) {
+            if ($public) {
+                header('Location: /login.php', true, 303);
+                exit;
+            }
             self::deny(403, 'Invalid request token. Refresh the page and try again.');
         }
         if (in_array($name, array('SendMessage.php', 'send_mail.php'), true)) {

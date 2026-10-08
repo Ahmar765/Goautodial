@@ -155,6 +155,7 @@ require_once __DIR__ . '/php/RequestGuard.php';
       <div class="login-box-body">
         <p id="p1" style="" class="login-box-msg"><?php $lh->translateText("sign_in"); ?></p>
         <form action="" method="post">
+          <input type="hidden" name="_csrf" value="<?php echo \creamy\Security::csrfToken(); ?>">
           <div class="form-group has-feedback">
             <input id="input1" type="text" style="" class="form-control" name="username" placeholder="<?php $lh->translateText("username_or_email"); ?>" value="<?=$uname?>"/>
             <span class="glyphicon glyphicon-envelope form-control-feedback"></span>

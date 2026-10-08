@@ -92,6 +92,7 @@ require_once __DIR__ . '/php/RequestGuard.php';
         <p class="login-box-msg"><?php $lh->translateText("reset_password"); ?></p>
    		<?php if ($result == NULL) { ?>
         <form action="" method="post">
+          <input type="hidden" name="_csrf" value="<?php echo \creamy\Security::csrfToken(); ?>">
           <div class="form-group has-feedback">
             <input type="password" class="form-control" name="password1" id="password1" placeholder="<?php $lh->translateText("insert_new_password"); ?>"/>
             <span class="glyphicon glyphicon-lock form-control-feedback"></span>
