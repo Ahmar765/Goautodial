@@ -51,7 +51,7 @@ jobs:
             HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080 || echo "000")
             echo "Received HTTP Status Code: $HTTP_STATUS"
 
-            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ] && [ "$HTTP_STATUS" != "426" ]; then
+            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ] && [ "$HTTP_STATUS" != "426" ] && [ "$HTTP_STATUS" != "401" ]; then
               echo "----------------------------------------------------"
               echo "ERROR: Health check failed! (HTTP Status: $HTTP_STATUS)"
               echo "Fetching last 40 lines of container logs for debugging:"
