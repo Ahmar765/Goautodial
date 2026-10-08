@@ -53,7 +53,7 @@ jobs:
               HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/login.php || echo "000")
               echo "Healthcheck attempt $((COUNT+1)): Received HTTP Status $HTTP_STATUS"
               
-              # Agar 200 (OK), 302 (Redirect), ya 401 (Auth required) aaye to pass
+              # if 200 (OK), 302 (Redirect), or 401 (Auth required) then pass
               if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "302" ] || [ "$HTTP_STATUS" = "401" ]; then
                 echo "Health check passed with HTTP Status $HTTP_STATUS!"
                 break
@@ -63,7 +63,7 @@ jobs:
               sleep 4
             done
 
-            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ] && [ "$HTTP_STATUS" != "401" ]; then
+            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ]; then
               echo "----------------------------------------------------"
               echo "ERROR: Health check failed! (HTTP Status: $HTTP_STATUS)"
               echo "Fetching last 40 lines of container logs for debugging:"
