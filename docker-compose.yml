@@ -55,26 +55,14 @@
       MYSQL_USER: ${DB_USER:?Set DB_USER}
       MYSQL_PASSWORD: ${DB_PASS:?Set DB_PASS}
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
+      test: ["CMD-SHELL", "mariadb -u ${DB_USER} -p${DB_PASS} -e 'SELECT 1 FROM goautodial.settings LIMIT 1;' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
     volumes:
       - goautodial-db-data:/var/lib/mysql
-
-  # Native Asterisk 18 is running on host; container disabled to avoid port conflicts
-  # asterisk:
-  #   image: andrius/asterisk:latest
-  #   restart: unless-stopped
-  #   network_mode: "host"
-  #   cap_add:
-  #     - NET_ADMIN
-  #     - SYS_NICE
-  #   volumes:
-  #     - goautodial-asterisk-etc:/etc/asterisk
-  #     - goautodial-asterisk-lib:/var/lib/asterisk
-  #     - goautodial-asterisk-spool:/var/spool/asterisk
-  #     - goautodial-asterisk-log:/var/log/asterisk
+      - ./create_sessions.sql:/docker-entrypoint-initdb.d/01-sessions.sql:ro
 
 volumes:
   goautodial-db-data:

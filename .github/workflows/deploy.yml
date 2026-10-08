@@ -43,15 +43,27 @@ jobs:
               exit 1
             fi
 
-            # 4. HTTP Health Check & Auto-Rollback on Failure
-            echo "Waiting 7 seconds for Apache to initialize..."
-            sleep 7
+            # 4. HTTP Health Check & Auto-Rollback on Failure with Retry Loop
+            echo "Waiting for Web & Database services to become ready..."
+            MAX_RETRIES=15
+            COUNT=0
+            HTTP_STATUS="000"
 
-            echo "Performing HTTP Health Check on http://127.0.0.1:8080..."
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080 || echo "000")
-            echo "Received HTTP Status Code: $HTTP_STATUS"
+            while [ $COUNT -lt $MAX_RETRIES ]; do
+              HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/login.php || echo "000")
+              echo "Healthcheck attempt $((COUNT+1)): Received HTTP Status $HTTP_STATUS"
+              
+              # Agar 200 (OK), 302 (Redirect), ya 401 (Auth required) aaye to pass
+              if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "302" ] || [ "$HTTP_STATUS" = "401" ]; then
+                echo "Health check passed with HTTP Status $HTTP_STATUS!"
+                break
+              fi
+              
+              COUNT=$((COUNT+1))
+              sleep 4
+            done
 
-            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ] && [ "$HTTP_STATUS" != "426" ] && [ "$HTTP_STATUS" != "401" ]; then
+            if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "302" ] && [ "$HTTP_STATUS" != "401" ]; then
               echo "----------------------------------------------------"
               echo "ERROR: Health check failed! (HTTP Status: $HTTP_STATUS)"
               echo "Fetching last 40 lines of container logs for debugging:"
